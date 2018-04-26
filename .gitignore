@@ -1,0 +1,14 @@
+*.pyc
+*.so
+*.jsonlines
+logs
+chinese_logs
+arabic_logs
+conll-2012
+*.vec
+*.txt
+*.txt.filtered
+*.hdf5
+*.v*_*_conll
+*.filtered
+srlconll-1.1
