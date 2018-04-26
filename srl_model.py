@@ -455,6 +455,9 @@ class SRLModel(object):
     spans_log_mask = tf.log(tf.to_float(candidate_mask))  # [num_sentences, max_num_candidates]
     predict_dict = {"candidate_starts": candidate_starts, "candidate_ends": candidate_ends}
 
+    if head_scores is not None:
+      predict_dict["head_scores"] = head_scores
+
     # Compute SRL representation.
     if self.config["srl_weight"] > 0:
       flat_candidate_arg_scores = get_unary_scores(
@@ -490,19 +493,6 @@ class SRLModel(object):
 
       arg_span_indices = batch_gather(candidate_span_ids, top_arg_indices)  # [num_sentences, max_num_args]
       arg_emb = tf.gather(candidate_span_emb, arg_span_indices)  # [num_sentences, max_num_args, emb]
-    
-      if self.config["task_heads"]:
-        with tf.variable_scope("srl_head_scores"):
-          srl_head_scores = util.projection(flat_context_outputs, 1)  # [num_words, 1]
-        arg_head_attention = tf.nn.softmax(
-            tf.gather(srl_head_scores, head_indices) + tf.expand_dims(head_indices_log_mask, 2),
-            dim=1)  # [num_spans, max_width, 1]
-        arg_head_emb = tf.reduce_sum(arg_head_attention * span_head_emb, 1)  # [num_spans, emb]
-        arg_emb = tf.concat([arg_emb, tf.gather(arg_head_emb, arg_span_indices)], 2)
-        predict_dict["srl_head_scores"] = srl_head_scores
-      elif head_scores is not None:
-        predict_dict["srl_head_scores"] = head_scores
-
       pred_emb = batch_gather(candidate_pred_emb, top_pred_indices)  # [num_sentences, max_num_preds, emb]
       max_num_args = util.shape(arg_scores, 1)
       max_num_preds = util.shape(pred_scores, 1)
@@ -533,16 +523,7 @@ class SRLModel(object):
       mention_emb = tf.gather(candidate_span_emb, top_mention_indices)  # [k, emb]
       mention_doc_ids = tf.gather(candidate_doc_ids, top_mention_indices)  # [k]
 
-      if self.config["task_heads"]:
-        with tf.variable_scope("coref_head_scores"):
-          coref_head_scores = util.projection(flat_context_outputs, 1)  # [num_words, 1]
-        mention_head_attention = tf.nn.softmax(
-            tf.gather(coref_head_scores, head_indices) + tf.expand_dims(head_indices_log_mask, 2),
-            dim=1)  # [num_spans, max_width, 1]
-        mention_head_emb = tf.reduce_sum(mention_head_attention * span_head_emb, 1)  # [num_spans, emb]
-        mention_emb = tf.concat([mention_emb, tf.gather(mention_head_emb, top_mention_indices)], 1)  # [k, emb2]
-        predict_dict["coref_head_scores"] = coref_head_scores
-      elif head_scores is not None:
+      if head_scores is not None:
         predict_dict["coref_head_scores"] = head_scores
 
       # FIXME: We really shouldn't use unsorted. There must be a bug in sorting.
@@ -587,45 +568,6 @@ class SRLModel(object):
       antecedent_scores = tf.concat([
           tf.zeros([k, 1]), antecedent_scores + antecedent_log_mask], 1)  # [k, max_ant+1]
 
-      # TODO: Experimental
-      if self.use_entity_model:
-        antecedent_attn = tf.nn.softmax(antecedent_scores, dim=1)  # [k, max_ant+1]
-        # The "dummy" attention should point to the mention embedding itself.
-        padded_antecedent_emb = tf.concat([tf.expand_dims(mention_emb, 1), antecedent_emb], 1)  # [k, max_ant+1, emb]
-        entity_emb = tf.reduce_sum(tf.expand_dims(antecedent_attn, 2) * padded_antecedent_emb, 1)  # [k, emb]
-        # 1 if we want the antecedent. 0 for keeping the current mention embedding.
-        #entity_gate = tf.sigmoid(util.projection(tf.concat([mention_emb, entity_emb], 1), 1))  # [k, 1]
-        entity_gate = tf.sigmoid(util.projection(mention_emb, 1))  # [k, 1]
-        padded_entity_gate = tf.concat([tf.zeros([1,1]), entity_gate], axis=0)  # [k+1, 1] 
-        # This could create two copies to the entity emb.
-        padded_entity_emb = tf.concat([tf.zeros([1, util.shape(mention_emb, 1)]), entity_emb], axis=0)  # [k+1, emb]
-        # Map span ids ot mention ids (0 ... k), 0 means not in spans.
-        span_to_mention_ids = tf.sparse_to_dense(sparse_indices=top_mention_indices,  # [k]
-                                                 output_shape=[num_candidates],
-                                                 sparse_values=tf.range(k, dtype=tf.int32) + 1,
-                                                 default_value=0,
-                                                 validate_indices=False)  # [num_candidates]
-        # Update argument representation.
-        if self.config["refresh_srl_scores"]:
-          arg_to_mention_ids = tf.gather(span_to_mention_ids, arg_span_indices)  # [num_sentences, max_num_args]
-          arg_entity_gate = tf.gather(padded_entity_gate, arg_to_mention_ids)  # [num_sentences, max_num_args, 1]
-          arg_entity_emb = tf.gather(padded_entity_emb, arg_to_mention_ids)  # [num_sentences, max_num_args, emb]
-          # Update argument representation. Everything else should be the same.
-          arg_emb = (1 - arg_entity_gate) * arg_emb + arg_entity_gate * arg_entity_emb
- 
-        # Recompute antecedent scores
-        if self.config["refresh_antecedent_scores"]:
-          mention_emb = (1 - entity_gate) * mention_emb + entity_gate * entity_emb
-          antecedent_scores, _, _ = get_antecedent_scores(
-              mention_emb, mention_scores, antecedents, self.config, self.dropout, reuse=True)  # [k, max_ant]
-          antecedent_scores = tf.concat([
-              tf.zeros([k, 1]), antecedent_scores + antecedent_log_mask], 1)  # [k, max_ant+1]
-
-        predict_dict.update({
-            "entity_gate": entity_gate,  # [k,1]
-            "antecedent_attn": antecedent_attn[:,1:]  # [k, max_ant]
-        })
-
     # Get labels.    
     if self.config["ner_weight"] + self.config["const_weight"] + self.config["coref_weight"] > 0:
       gold_ner_labels, gold_const_labels, gold_coref_cluster_ids = get_span_task_labels(
@@ -640,14 +582,8 @@ class SRLModel(object):
           arg_emb, pred_emb, arg_scores, pred_scores, len(self.srl_labels), self.config, self.dropout
       )  # [num_sentences, max_num_args, max_num_preds, num_labels]
 
-      ## TODO: Experimental.
-      #if not "use_mixed_srl_loss" in self.config:
       srl_loss = get_srl_softmax_loss(
           srl_scores, srl_labels, num_args, num_preds)  # [num_sentences, max_num_args, max_num_preds]
-      '''else:
-        srl_loss = get_srl_mixed_loss(
-            srl_scores, srl_labels, num_args, num_preds, len(self.adjunct_roles), len(self.core_roles))  # []'''
-        
       predict_dict.update({
         "candidate_arg_scores": candidate_arg_scores,
         "candidate_pred_scores": candidate_pred_scores,
@@ -677,19 +613,10 @@ class SRLModel(object):
       non_dummy_indicator = tf.expand_dims(mention_cluster_ids > 0, 1)  # [k, 1]
       pairwise_labels = tf.logical_and(same_cluster_indicator, non_dummy_indicator)  # [k, max_ant]
 
-      # TODO: Experimental
-      if self.config["coref_loss"] == "mention_rank":
-        dummy_labels = tf.logical_not(tf.reduce_any(pairwise_labels, 1, keep_dims=True))  # [k, 1]
-        antecedent_labels = tf.concat([dummy_labels, pairwise_labels], 1)  # [k, max_ant+1]
-        coref_loss = get_coref_softmax_loss(antecedent_scores, antecedent_labels)  # [k]
-      else:
-        coref_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=tf.to_float(pairwise_labels), logits=antecedent_scores[:,1:])  # [k, max_ent]
-        coref_loss = tf.boolean_mask(coref_loss, antecedent_mask)  # []
-        coref_loss.set_shape([None])
-        
+      dummy_labels = tf.logical_not(tf.reduce_any(pairwise_labels, 1, keep_dims=True))  # [k, 1]
+      antecedent_labels = tf.concat([dummy_labels, pairwise_labels], 1)  # [k, max_ant+1]
+      coref_loss = get_coref_softmax_loss(antecedent_scores, antecedent_labels)  # [k]
       coref_loss = tf.reduce_sum(coref_loss) # / tf.to_float(num_sentences)  # []
-
       predict_dict.update({
           "candidate_mention_starts": flat_candidate_starts,  # [num_candidates]
           "candidate_mention_ends": flat_candidate_ends,  # [num_candidates]
@@ -706,24 +633,11 @@ class SRLModel(object):
     dummy_scores = tf.expand_dims(tf.zeros_like(candidate_span_ids, dtype=tf.float32), 2)
     if self.config["ner_weight"] > 0:
       ner_span_emb = candidate_span_emb
-      if self.config["task_heads"]:
-        with tf.variable_scope("ner_head_scores"):
-          ner_head_scores = util.projection(flat_context_outputs, 1)  # [num_words, 1]
-        ner_head_attention = tf.nn.softmax(
-            tf.gather(ner_head_scores, head_indices) + tf.expand_dims(head_indices_log_mask, 2),
-            dim=1)  # [num_spans, max_width, 1]
-        ner_head_emb = tf.reduce_sum(ner_head_attention * span_head_emb, 1)  # [num_spans, emb]
-        ner_span_emb = tf.concat([candidate_span_emb, ner_head_emb], 1)  # [num_spans, emb2]
-        predict_dict["ner_head_scores"] = ner_head_scores
-      elif head_scores is not None:
-        predict_dict["ner_head_scores"] = head_scores
-
       flat_ner_scores = get_unary_scores(
           ner_span_emb, self.config, self.dropout, len(self.ner_labels) - 1,
           "ner_scores")  # [num_candidates, num_labels-1]
       if self.config["span_score_weight"] > 0:
         flat_ner_scores += self.config["span_score_weight"] * tf.expand_dims(flat_span_scores, 1)
-
       ner_scores = tf.gather(
           flat_ner_scores, candidate_span_ids
       ) + tf.expand_dims(spans_log_mask, 2)  # [num_sentences, max_num_candidates, num_labels-1]
@@ -757,23 +671,9 @@ class SRLModel(object):
     tf.summary.scalar("NER_loss", ner_loss)
     tf.summary.scalar("Constituency_loss", const_loss)
     tf.summary.scalar("Coref_loss", coref_loss)
-
-    srl_loss_Print = tf.Print(srl_loss, [srl_loss, ner_loss, coref_loss], "Loss")
-                              # log_var_srl, log_var_ner, log_var_coref]
-    if self.config["weight_loss_by_uncertainty"]:
-      # TODO: Experimental. Assume we are doing all 3 tasks for now.
-      log_var_srl = tf.Variable(0.0, dtype=tf.float32, name="log_var_srl") 
-      log_var_coref = tf.Variable(0.0, dtype=tf.float32, name="log_var_coref") 
-      log_var_ner = tf.Variable(0.0, dtype=tf.float32, name="log_var_ner")
-
-      loss = log_var_srl + log_var_coref + log_var_ner + 0.5 * (
-          tf.exp(-log_var_srl) * srl_loss + tf.exp(-log_var_coref) * coref_loss + tf.exp(-log_var_ner) * ner_loss)
-      tf.summary.scalar("SRL_log_var", log_var_srl)
-      tf.summary.scalar("NER_log_var", log_var_ner)
-      tf.summary.scalar("Coref_log_var", log_var_coref)
-    else:
-      loss = self.config["srl_weight"] * srl_loss + self.config["ner_weight"] * ner_loss + (
-          self.config["const_weight"] * const_loss + self.config["coref_weight"] * coref_loss)
+    #srl_loss_Print = tf.Print(srl_loss, [srl_loss, ner_loss, coref_loss], "Loss")
+    loss = self.config["srl_weight"] * srl_loss + self.config["ner_weight"] * ner_loss + (
+        self.config["const_weight"] * const_loss + self.config["coref_weight"] * coref_loss)
 
     return predict_dict, loss
 
@@ -896,21 +796,6 @@ class SRLModel(object):
           gold_c_violations += c_violations
           gold_r_violations += r_violations
           total_gold_predicates += len(sent_example[1].keys())
-
-          # Print debugging info.
-          head_scores = predict_dict["srl_head_scores"][word_offset:word_offset+text_length, :]
-          ner_pred = predictions["ner"][j] if "ner" in predictions else None
-          if "coref_head_scores" in predict_dict:
-            coref_head_scores = predict_dict["coref_head_scores"][word_offset:word_offset+text_length,:]
-          else:
-            coref_head_scores = None
-
-          debug_printer.print_sentence_and_beam(
-              sentences[j],
-              predict_dict["arg_starts"][j][:na], predict_dict["arg_ends"][j][:na], predict_dict["arg_scores"][j][:na],
-              predict_dict["predicates"][j][:np], predict_dict["pred_scores"][j][:np], predict_dict["srl_scores"][j], 
-              predictions["srl"][j])
-
           sent_id += 1
           word_offset += text_length
 

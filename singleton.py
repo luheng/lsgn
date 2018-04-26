@@ -9,7 +9,6 @@ import random
 
 import numpy as np
 import tensorflow as tf
-#import coref_model as cm
 import srl_model as srl
 import util
 
@@ -30,12 +29,6 @@ if __name__ == "__main__":
   else:
     util.set_gpus()
 
-  '''tf.set_random_seed(12345)
-  random.seed(12345)
-  if "best" in name:
-    print "Coref"
-    model = cm.CorefModel(config)
-  else:'''
   model = srl.SRLModel(config)
   saver = tf.train.Saver()
   init_op = tf.global_variables_initializer()

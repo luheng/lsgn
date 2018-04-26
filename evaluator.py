@@ -10,13 +10,14 @@ import shutil
 
 import numpy as np
 import tensorflow as tf
-import coref_model as cm
 import srl_model as srl
 import util
+
 
 def copy_checkpoint(source, target):
   for ext in (".index", ".data-00000-of-00001"):
     shutil.copyfile(source + ext, target + ext)
+
 
 if __name__ == "__main__":
   util.set_gpus()
@@ -77,7 +78,6 @@ if __name__ == "__main__":
         for task, f1 in best_task_f1.iteritems():
           print "Max {} F1: {:.2f}".format(task, f1) 
         
-
         writer.add_summary(eval_summary, global_step)
         print "Evaluation written to {} at step {}".format(log_dir, global_step)
 
