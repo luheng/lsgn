@@ -128,6 +128,7 @@ class LSGNEvaluator(object):
         coref_evaluator.update(predictions["predicted_clusters"], gold_clusters, predictions["mention_to_predicted"],
                                mention_to_gold)
         coref_predictions[doc_example["doc_key"]] = predictions["predicted_clusters"]
+        
         # Evaluate retrieval.
         doc_text_length = sum([len(s) for s in sentences])
         srl_eval_utils.evaluate_retrieval(
@@ -183,7 +184,6 @@ class LSGNEvaluator(object):
           summary_dict[t] = v
         print ", ".join(results_to_print)
 
-
       if total_num_predicates > 0:
         print ("Constraint voilations: U: {} ({}), C: {} ({}), R: {} ({})".format(
             1.0 * unique_core_role_violations / total_num_predicates, unique_core_role_violations,
@@ -225,7 +225,6 @@ class LSGNEvaluator(object):
       summary_dict["Unlabeled Constituency precision"] = ul_const_prec
       summary_dict["Unlabeled Constituency recall"] = ul_const_recall
       task_to_f1["constituency"] = const_f1
-
 
     if self.config["coref_weight"] > 0:
       conll_results = conll.evaluate_conll(self.config["conll_eval_path"], coref_predictions, official_stdout)
