@@ -6,6 +6,7 @@ import threading
 
 from input_utils import *
 import util
+import srl_eval_utils
 
 
 # Names for the "given" tensors.
@@ -310,4 +311,28 @@ class LSGNData(object):
       "coref_len": len(coref_starts)
     }
     return example_tensor
+
+
+  def load_eval_data(self):
+    eval_data = []
+    eval_tensors = []
+    coref_eval_data = []
+    with open(self.config["eval_path"]) as f:
+      eval_examples = [json.loads(jsonline) for jsonline in f.readlines()]
+    populate_sentence_offset(eval_examples)
+    for doc_id, example in enumerate(eval_examples):
+      doc_tensors = []
+      num_mentions_in_doc = 0
+      for e in self.split_document_example(example):
+        # Because each batch=1 document at test time, we do not need to offset cluster ids.
+        e["cluster_id_offset"] = 0
+        e["doc_id"] = doc_id + 1
+        doc_tensors.append(self.tensorize_example(e, is_training=False))
+        num_mentions_in_doc += len(e["coref"])
+      assert num_mentions_in_doc == len(util.flatten(example["clusters"]))
+      eval_tensors.append(doc_tensors)
+      eval_data.extend(srl_eval_utils.split_example_for_eval(example))
+      coref_eval_data.append(example)
+    print("Loaded {} eval examples.".format(len(eval_data)))
+    return eval_data, eval_tensors, coref_eval_data
  

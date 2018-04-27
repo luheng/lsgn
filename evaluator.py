@@ -12,6 +12,7 @@ import numpy as np
 import tensorflow as tf
 
 from lsgn_data import LSGNData
+from lsgn_evaluator import LSGNEvaluator
 from srl_model import SRLModel
 import util
 
@@ -45,6 +46,7 @@ if __name__ == "__main__":
   util.print_config(config)
   data = LSGNData(config)
   model = SRLModel(data, config)
+  evaluator = LSGNEvaluator(config)
 
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
@@ -68,7 +70,8 @@ if __name__ == "__main__":
         saver.restore(session, ckpt.model_checkpoint_path)
 
         print "Start evaluating ..."
-        eval_summary, f1, task_to_f1 = model.evaluate(session)
+        eval_summary, f1, task_to_f1 = evaluator.evaluate(
+            session, data, model.predictions, model.loss)
 
         if f1 > max_f1:
           max_f1 = f1
