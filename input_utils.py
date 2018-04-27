@@ -100,6 +100,7 @@ def populate_sentence_offset(examples):
     sent_offset += len(example["sentences"])
 
 
+# FIXME ...
 def split_srl_labels(srl_labels):
   adjunct_role_labels = []
   core_role_labels = []
@@ -110,4 +111,6 @@ def split_srl_labels(srl_labels):
     elif label != "V": #and label != "C-V":
       core_role_labels.append(label)
   return adjunct_role_labels, core_role_labels
+
+
 

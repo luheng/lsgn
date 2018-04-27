@@ -9,14 +9,15 @@ import operator
 import os
 import random
 import tensorflow as tf
-import threading
 import time
 
 import util
 import conll
+from lsgn_data import LSGNData
 import metrics as coref_metrics
 
 import debug_utils
+from embedding_helper import get_embeddings
 import inference_utils
 from input_utils import *
 from model_utils import *
@@ -24,121 +25,15 @@ import srl_eval_utils
 
 
 class SRLModel(object):
-  def __init__(self, config):
+  def __init__(self, lsgn_data, config):
     self.config = config
-    self.context_embeddings = util.EmbeddingDictionary(config["context_embeddings"])
-    self.head_embeddings = util.EmbeddingDictionary(config["head_embeddings"],
-                                                    maybe_cache=self.context_embeddings)
-    self.char_embedding_size = config["char_embedding_size"]
-    self.char_dict = util.load_char_dict(config["char_vocab_path"])
-    
-    self.genres = { g:i for i,g in enumerate(config["genres"]) }
- 
-    if config["lm_path"]:
-      self.lm_file = h5py.File(self.config["lm_path"], "r")
-      self.lm_layers = self.config["lm_layers"]
-      self.lm_size = self.config["lm_size"]
-    else:
-      self.lm_file = None
-      self.lm_layers = 0
-      self.lm_size = 0
-
-    # Other configs.
-    self.use_entity_model = config["refresh_srl_scores"] or config["refresh_antecedent_scores"]
-    if self.use_entity_model:
-      print "Using entity model."
-
-    self.adjunct_roles, self.core_roles = split_srl_labels(config["srl_labels"])
-    print self.adjunct_roles, self.core_roles
-    self.srl_labels_inv  = [""] + self.adjunct_roles + self.core_roles
-    print len(self.srl_labels_inv), len(self.adjunct_roles), len(self.core_roles)
-    self.srl_labels = { l:i for i,l in enumerate(self.srl_labels_inv) }
-
-    self.const_labels = { l:i for i,l in enumerate([""] + config["const_labels"]) }
-    self.const_labels_inv = [""] + config["const_labels"]
-    self.ner_labels = { l:i for i,l in enumerate([""] + config["ner_labels"]) }
-    self.ner_labels_inv = [""] + config["ner_labels"]
-
+    self.data = lsgn_data 
     self.eval_data = None  # Load eval data lazily.
 
-    # Need to make sure they are in the same order as input_names + label_names
-    self.input_props = [
-      (tf.float32, [None, self.context_embeddings.size]), # Context embeddings.
-      (tf.float32, [None, self.head_embeddings.size]), # Head embeddings.
-      (tf.float32, [None, self.lm_size, self.lm_layers]), # LM embeddings.
-      (tf.int32, [None, None]), # Character indices.
-      (tf.int32, []),  # Text length.
-      (tf.int32, [None]),  # Speaker IDs.
-      (tf.int32, []),  # Genre.
-      # (tf.int32, []),  # Word offset.
-      (tf.int32, []),  # Document ID.
-      (tf.bool, []),  # Is training.
-      (tf.int32, [None]),  # Gold predicate ids (for input).
-      (tf.int32, []),  # Num gold predicates (for input).
-      (tf.int32, [None]),  # Predicate ids (length=num_srl_relations).
-      (tf.int32, [None]),  # Argument starts.
-      (tf.int32, [None]),  # Argument ends.
-      (tf.int32, [None]),  # SRL labels.
-      (tf.int32, []),  # Number of SRL relations.
-      (tf.int32, [None]),  # Constituent starts.
-      (tf.int32, [None]),  # Constituent ends.
-      (tf.int32, [None]),  # Constituent labels.
-      (tf.int32, []),  # Number of  constituent spans.
-      (tf.int32, [None]),  # NER starts.
-      (tf.int32, [None]),  # NER ends.
-      (tf.int32, [None]),  # NER labels.
-      (tf.int32, []),  # Number of NER spans.
-      (tf.int32, [None]),  # Coref mention starts.
-      (tf.int32, [None]),  # Coref mention ends.
-      (tf.int32, [None]),  # Coref cluster ids.
-      (tf.int32, []),  # Number of coref mentions.
-    ]
-
-    # Names for the "given" tensors.
-    self.input_names = [
-        "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len", #"word_offset",
-        "speaker_ids", "genre", "doc_id", "is_training",
-        "gold_predicates", "num_gold_predicates",
-    ]
-    # Names for the "gold" tensors.
-    self.label_names = [
-        "predicates", "arg_starts", "arg_ends", "arg_labels", "srl_len",
-        "const_starts", "const_ends", "const_labels", "const_len",
-        "ner_starts", "ner_ends", "ner_labels", "ner_len",
-        "coref_starts", "coref_ends", "coref_cluster_ids", "coref_len",
-    ]
-    # Name for predicted tensors.
-    self.predict_names = [
-        "candidate_starts", "candidate_ends", "candidate_arg_scores", "candidate_pred_scores",
-        "arg_starts", "arg_ends", "predicates", "num_args", "num_preds", "arg_labels", "srl_scores", "ner_scores",
-        "const_scores", "arg_scores", "pred_scores",
-        "candidate_mention_starts", "candidate_mention_ends", "candidate_mention_scores", "mention_starts",
-        "mention_ends", "antecedents", "antecedent_scores",
-        "srl_head_scores", "coref_head_scores", "ner_head_scores", "entity_gate", "antecedent_attn"
-    ]
-
-    self.batch_size = self.config["batch_size"]
-    dtypes, shapes = zip(*self.input_props)
-    if self.batch_size > 0 and self.config["max_tokens_per_batch"] < 0:
-      # Use fixed batch size if number of words per batch is not limited (-1).
-      self.queue_input_tensors = [tf.placeholder(dtype, shape) for dtype, shape in self.input_props]
-      queue = tf.PaddingFIFOQueue(capacity=self.batch_size * 2, dtypes=dtypes, shapes=shapes)
-      self.enqueue_op = queue.enqueue(self.queue_input_tensors)
-      self.input_tensors = queue.dequeue_many(self.batch_size)
-    else:
-      # Use dynamic batch size.
-      new_shapes = [[None] + shape for shape in shapes]
-      self.queue_input_tensors = [tf.placeholder(dtype, shape) for dtype, shape in zip(dtypes, new_shapes)]
-      queue = tf.PaddingFIFOQueue(capacity=2, dtypes=dtypes, shapes=new_shapes)
-      self.enqueue_op = queue.enqueue(self.queue_input_tensors)
-      self.input_tensors = queue.dequeue()
-
-    num_features = len(self.input_names)
-    input_dict = dict(zip(self.input_names, self.input_tensors[:num_features]))
-    labels_dict = dict(zip(self.label_names, self.input_tensors[num_features:]))
-
     # TODO: Make labels_dict = None at test time.
-    self.predictions, self.loss = self.get_predictions_and_loss(input_dict, labels_dict)
+    self.predictions, self.loss = self.get_predictions_and_loss(
+        self.data.input_dict, self.data.labels_dict)
+
     self.global_step = tf.Variable(0, name="global_step", trainable=False)
     self.reset_global_step = tf.assign(self.global_step, 0)
     learning_rate = tf.train.exponential_decay(
@@ -157,247 +52,6 @@ class SRLModel(object):
     # for var in tf.trainable_variables():
     #  print var
 
-  def start_enqueue_thread(self, session):
-    with open(self.config["train_path"], "r") as f:
-      train_examples = [json.loads(jsonline) for jsonline in f.readlines()]
-
-    populate_sentence_offset(train_examples)
-    def _enqueue_loop():
-      adaptive_batching = (self.config["max_tokens_per_batch"] > 0)
-      while True:
-        random.shuffle(train_examples)
-        doc_examples = []  # List of list of examples.
-        cluster_id_offset = 0
-        num_sentences = 0
-        num_mentions = 0
-        for doc_id, example in enumerate(train_examples):
-          doc_examples.append([])
-          for e in self.split_document_example(example):
-            e["doc_id"] = doc_id + 1
-            e["cluster_id_offset"] = cluster_id_offset
-            doc_examples[-1].append(e)
-            num_mentions += len(e["coref"]) 
-          cluster_id_offset += len(example["clusters"])
-          num_sentences += len(doc_examples[-1])
-        print ("Load {} training documents with {} sentences and a total of {} clusters and {} mentions.".format(
-            doc_id, num_sentences, cluster_id_offset, num_mentions))
-
-        tensor_names = self.input_names + self.label_names
-        batch_buffer = []
-        num_tokens_in_batch = 0
-        for examples in doc_examples:
-          tensor_examples = [self.tensorize_example(e, is_training=True) for e in examples]
-          if self.config["batch_size"] == -1:
-            # Random truncation.
-            num_sents = len(tensor_examples)
-            max_training_sents = self.config["max_training_sentences"]
-            if num_sents > max_training_sents:
-              sentence_offset = random.randint(0, num_sents - max_training_sents)
-              tensor_examples = tensor_examples[sentence_offset:sentence_offset + max_training_sents]
-            batched_tensor_examples = [pad_batch_tensors(tensor_examples, tn) for tn in tensor_names]
-            feed_dict = dict(zip(self.queue_input_tensors, batched_tensor_examples))
-            session.run(self.enqueue_op, feed_dict=feed_dict)
-          elif adaptive_batching:
-            for tensor_example in tensor_examples:
-              num_tokens = tensor_example["text_len"]
-              if len(batch_buffer) >= self.config["batch_size"] or (
-                  num_tokens_in_batch + num_tokens > self.config["max_tokens_per_batch"]):
-                batched_tensor_examples = [pad_batch_tensors(batch_buffer, tn) for tn in tensor_names]
-                feed_dict = dict(zip(self.queue_input_tensors, batched_tensor_examples))
-                session.run(self.enqueue_op, feed_dict=feed_dict)
-                batch_buffer = []
-                num_tokens_in_batch = 0
-              batch_buffer.append(tensor_example)
-              num_tokens_in_batch += num_tokens
-          else:
-            for tensor_example in tensor_examples:
-              feed_dict = dict(zip(self.queue_input_tensors, [tensor_example[tn] for tn in tensor_names]))
-              session.run(self.enqueue_op, feed_dict=feed_dict)
-        # Clear out the batch buffer after each epoch, to avoid the potential danger where the first document
-        # in the next batch is the same one as the last document in the previous batch.
-        if len(batch_buffer) > 0:
-          batched_tensor_examples = [pad_batch_tensors(batch_buffer, tn) for tn in tensor_names]
-          feed_dict = dict(zip(self.queue_input_tensors, batched_tensor_examples))
-          session.run(self.enqueue_op, feed_dict=feed_dict)
-            
-    enqueue_thread = threading.Thread(target=_enqueue_loop)
-    enqueue_thread.daemon = True
-    enqueue_thread.start()
-
-  def split_document_example(self, example):
-    """ Split document-based samples into sentence-based samples.
-    """
-    clusters = example["clusters"]
-    gold_mentions = sorted(tuple(m) for m in util.flatten(clusters))
-    cluster_ids = {}
-    for cluster_id, cluster in enumerate(clusters):
-      for mention in cluster:
-        cluster_ids[tuple(mention)] = cluster_id + 1
-
-    sentences = example["sentences"]
-    split_examples = []
-    word_offset = 0
-
-    if "speakers" in example:
-      speakers = example["speakers"]
-      flat_speakers = util.flatten(example["speakers"])
-      speaker_dict = { s:i for i,s in enumerate(set(flat_speakers)) }
-      speaker_ids = []
-      for sent_speakers in speakers:
-        speaker_ids.append([speaker_dict[s] for s in sent_speakers])
-    else:
-      speaker_ids = [[0] for _ in sentences]
-  
-    if "genre" in example:
-      genre_id = self.genres[example["doc_key"][:2]]
-    else:
-      genre_id = 0
-
-    for i, sentence in enumerate(sentences):
-      text_len = len(sentence)
-      coref_mentions = []
-      for start, end in gold_mentions:
-        if word_offset <= start and end < word_offset + text_len:
-          coref_mentions.append([start, end, cluster_ids[(start, end)]])
-
-      sent_example = {
-        "sentence": sentence,
-        "doc_key": example["doc_key"],
-        "speaker_ids": speaker_ids[i],
-        "genre": genre_id,
-        "sent_id": i,
-        "constituents": example["constituents"][i],
-        "ner": example["ner"][i],
-        "srl": example["srl"][i],
-        "coref": coref_mentions,
-        "word_offset": word_offset, 
-        "sent_offset": example["sent_offset"]  # Sentence offset for the same doc ID.
-      }
-      word_offset += text_len
-      split_examples.append(sent_example)
-    return split_examples
-
-  def tensorize_example(self, example, is_training):
-    """ Tensorize examples and caching embeddings.
-    """
-    sentence = example["sentence"]
-    doc_key = example["doc_key"]
-    sent_id = example["sent_id"]  # Number of sentence in the document.
-    word_offset = example["word_offset"]
-    text_len = len(sentence)
-
-    lm_doc_key = None
-    lm_sent_key = None
-    if self.lm_file and "ontonotes" in self.config["lm_path"]:
-      idx = doc_key.rfind("_")
-      lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
-    elif self.lm_file and "conll05" in self.config["lm_path"]:
-      lm_doc_key = doc_key[1:]  # "S1234" -> "1234"
-    else:
-      lm_doc_key = doc_key
-      lm_sent_key = str(sent_id)
-    lm_emb = load_lm_embeddings_for_sentence(self.lm_file, self.lm_layers, self.lm_size, lm_doc_key, lm_sent_key)
-    max_word_length = max(max(len(w) for w in sentence), max(self.config["filter_widths"]))
-    context_word_emb = np.zeros([text_len, self.context_embeddings.size])
-    head_word_emb = np.zeros([text_len, self.head_embeddings.size])
-    char_index = np.zeros([text_len, max_word_length])
-    for j, word in enumerate(sentence):
-      context_word_emb[j] = self.context_embeddings[word]
-      head_word_emb[j] = self.head_embeddings[word]
-      char_index[j, :len(word)] = [self.char_dict[c] for c in word]
-
-    const_starts, const_ends, const_labels = (
-        tensorize_labeled_spans(example["constituents"], self.const_labels))
-    ner_starts, ner_ends, ner_labels = (
-        tensorize_labeled_spans(example["ner"], self.ner_labels))
-    coref_starts, coref_ends, coref_cluster_ids = (
-        tensorize_labeled_spans(example["coref"], label_dict=None))
-    predicates, arg_starts, arg_ends, arg_labels = (
-        tensorize_srl_relations(example["srl"], self.srl_labels, filter_v_args=self.config["filter_v_args"]))
-    # For gold predicate experiment.
-    #gold_predicates = np.unique(predicates - word_offset)
-    gold_predicates = get_all_predicates(example["srl"]) - word_offset
-    example_tensor = {
-      # Inputs.
-      "context_word_emb": context_word_emb,
-      "head_word_emb": head_word_emb,
-      "lm_emb": lm_emb,
-      "char_idx": char_index,
-      "text_len": text_len,
-      "speaker_ids": np.array(example["speaker_ids"]),
-      "genre": example["genre"],
-      "doc_id": example["doc_id"],
-      "is_training": is_training,
-      "gold_predicates": gold_predicates,
-      "num_gold_predicates": len(gold_predicates),
-      # Labels.
-      "const_starts": const_starts - word_offset, 
-      "const_ends": const_ends - word_offset, 
-      "const_labels": const_labels,
-      "ner_starts": ner_starts - word_offset,
-      "ner_ends": ner_ends - word_offset,
-      "ner_labels": ner_labels,
-      "predicates": predicates - word_offset,
-      "arg_starts": arg_starts - word_offset,
-      "arg_ends": arg_ends - word_offset,
-      "arg_labels": arg_labels,
-      "coref_starts": coref_starts - word_offset,
-      "coref_ends": coref_ends - word_offset,
-      "coref_cluster_ids": coref_cluster_ids + example["cluster_id_offset"],
-      "srl_len": len(predicates),
-      "const_len": len(const_starts),
-      "ner_len": len(ner_starts),
-      "coref_len": len(coref_starts)
-    }
-    return example_tensor
-
-  def get_embeddings(self, context_word_emb, head_word_emb, char_index, lm_emb):
-    context_emb_list = [context_word_emb]
-    head_emb_list = [head_word_emb]
-
-    num_sentences = tf.shape(context_word_emb)[0]
-    max_sentence_length = tf.shape(context_word_emb)[1]
-
-    if self.config["char_embedding_size"] > 0:
-      char_emb = tf.gather(
-          tf.get_variable("char_embeddings", [len(self.char_dict), self.config["char_embedding_size"]]),
-          char_index)  # [num_sentences, max_sentence_length, max_word_length, emb]
-      flattened_char_emb = tf.reshape(
-          char_emb, [num_sentences * max_sentence_length, util.shape(char_emb, 2),
-          util.shape(char_emb, 3)])  # [num_sentences * max_sentence_length, max_word_length, emb]
-      flattened_aggregated_char_emb = util.cnn(
-          flattened_char_emb, self.config["filter_widths"],
-          self.config["filter_size"])  # [num_sentences * max_sentence_length, emb]
-      aggregated_char_emb = tf.reshape(
-          flattened_aggregated_char_emb, [num_sentences, max_sentence_length,
-          util.shape(flattened_aggregated_char_emb, 1)]) # [num_sentences, max_sentence_length, emb]
-      context_emb_list.append(aggregated_char_emb)
-      head_emb_list.append(aggregated_char_emb)
-
-    if self.lm_file:
-      lm_emb_size = util.shape(lm_emb, 2)
-      lm_num_layers = util.shape(lm_emb, 3)
-      with tf.variable_scope("lm_aggregation"):
-        self.lm_weights = tf.nn.softmax(tf.get_variable("lm_scores", [self.lm_layers],
-                                        initializer=tf.constant_initializer(0.0)))
-        self.lm_scaling = tf.get_variable("lm_scaling", [], initializer=tf.constant_initializer(1.0))
-      flattened_lm_emb = tf.reshape(
-          lm_emb, [num_sentences * max_sentence_length * lm_emb_size, lm_num_layers]
-      )  # [num_sentences * max_sentence_length * emb, layers]
-      flattened_aggregated_lm_emb = tf.matmul(
-          flattened_lm_emb, tf.expand_dims(self.lm_weights, 1)) # [num_sentences * max_sentence_length * emb, 1]
-      aggregated_lm_emb = tf.reshape(
-          flattened_aggregated_lm_emb, [num_sentences, max_sentence_length, lm_emb_size])
-      aggregated_lm_emb *= self.lm_scaling
-      context_emb_list.append(aggregated_lm_emb)
-
-    # Concatenate and apply dropout.
-    context_emb = tf.concat(context_emb_list, 2)  # [num_sentences, max_sentence_length, emb]
-    head_emb = tf.concat(head_emb_list, 2)  # [num_sentences, max_sentence_length, emb]
-    context_emb = tf.nn.dropout(context_emb, self.lexical_dropout)
-    head_emb = tf.nn.dropout(head_emb, self.lexical_dropout)
-    return context_emb, head_emb
-    
   def get_predictions_and_loss(self, inputs, labels):
     # This little thing got batched.
     is_training = inputs["is_training"][0]
@@ -410,9 +64,9 @@ class SRLModel(object):
     num_sentences = tf.shape(context_word_emb)[0]
     max_sentence_length = tf.shape(context_word_emb)[1]
 
-    context_emb, head_emb = self.get_embeddings(
-        context_word_emb, head_word_emb, inputs["char_idx"],
-        inputs["lm_emb"])  # [num_sentences, max_sentence_length, emb]
+    context_emb, head_emb, self.lm_weights, self.lm_scaling = get_embeddings(
+        self.data, context_word_emb, head_word_emb, inputs["char_idx"], inputs["lm_emb"],
+        self.lexical_dropout)  # [num_sentences, max_sentence_length, emb]
     
     text_len = inputs["text_len"]  # [num_sentences]
     text_len_mask = tf.sequence_mask(text_len, maxlen=max_sentence_length)  # [num_sentences, max_sentence_length]
@@ -554,7 +208,7 @@ class SRLModel(object):
       if self.config["use_metadata"]:
         print ("Using metadata")
         genre_emb = tf.gather(tf.get_variable(
-            "genre_embeddings", [len(self.genres), self.config["feature_size"]]), inputs["genre"][0]) # [emb]
+            "genre_embeddings", [len(self.data.genres), self.config["feature_size"]]), inputs["genre"][0]) # [emb]
         flat_speaker_ids = flatten_emb_by_sentence(inputs["speaker_ids"], text_len_mask)  # [text_len]
         mention_speaker_ids = tf.gather(flat_speaker_ids, mention_starts)  # [k]
       else:
@@ -579,7 +233,7 @@ class SRLModel(object):
           arg_starts, arg_ends, predicates, labels, max_sentence_length
       )  # [num_sentences, max_num_args, max_num_preds]
       srl_scores = get_srl_scores(
-          arg_emb, pred_emb, arg_scores, pred_scores, len(self.srl_labels), self.config, self.dropout
+          arg_emb, pred_emb, arg_scores, pred_scores, len(self.data.srl_labels), self.config, self.dropout
       )  # [num_sentences, max_num_args, max_num_preds, num_labels]
 
       srl_loss = get_srl_softmax_loss(
@@ -634,7 +288,7 @@ class SRLModel(object):
     if self.config["ner_weight"] > 0:
       ner_span_emb = candidate_span_emb
       flat_ner_scores = get_unary_scores(
-          ner_span_emb, self.config, self.dropout, len(self.ner_labels) - 1,
+          ner_span_emb, self.config, self.dropout, len(self.data.ner_labels) - 1,
           "ner_scores")  # [num_candidates, num_labels-1]
       if self.config["span_score_weight"] > 0:
         flat_ner_scores += self.config["span_score_weight"] * tf.expand_dims(flat_span_scores, 1)
@@ -651,7 +305,7 @@ class SRLModel(object):
     
     if self.config["const_weight"] > 0: 
       flat_const_scores = get_unary_scores(
-          candidate_span_emb, self.config, self.dropout, len(self.const_labels) - 1,
+          candidate_span_emb, self.config, self.dropout, len(self.data.const_labels) - 1,
           "const_scores")  # [num_sentences, max_num_candidates, num_labels-1]
       if self.config["span_score_weight"] > 0:
         flat_const_scores += self.config["span_score_weight"] * tf.expand_dims(flat_span_scores, 1)
@@ -688,11 +342,11 @@ class SRLModel(object):
       for doc_id, example in enumerate(eval_examples):
         doc_tensors = []
         num_mentions_in_doc = 0
-        for e in self.split_document_example(example):
+        for e in self.data.split_document_example(example):
           # Because each batch=1 document at test time, we do not need to offset cluster ids.
           e["cluster_id_offset"] = 0
           e["doc_id"] = doc_id + 1
-          doc_tensors.append(self.tensorize_example(e, is_training=False))
+          doc_tensors.append(self.data.tensorize_example(e, is_training=False))
           num_mentions_in_doc += len(e["coref"])
         assert num_mentions_in_doc == len(util.flatten(example["clusters"]))
         self.eval_tensors.append(doc_tensors)
@@ -745,11 +399,11 @@ class SRLModel(object):
 
     for i, doc_tensors in enumerate(self.eval_tensors):
       feed_dict = dict(zip(
-          self.input_tensors,
-          [pad_batch_tensors(doc_tensors, tn) for tn in self.input_names + self.label_names]))
+          self.data.input_tensors,
+          [pad_batch_tensors(doc_tensors, tn) for tn in self.data.input_names + self.data.label_names]))
 
       predict_names = []
-      for tn in self.predict_names:
+      for tn in self.data.predict_names:
          if tn in self.predictions:
           predict_names.append(tn)
 
@@ -760,8 +414,8 @@ class SRLModel(object):
       doc_size = len(doc_tensors)
       doc_example = self.coref_eval_data[i]
       sentences = doc_example["sentences"]
-      predictions = inference_utils.mtl_decode(sentences, predict_dict, self.srl_labels_inv, self.ner_labels_inv,
-                                               self.config)
+      predictions = inference_utils.mtl_decode(
+          sentences, predict_dict, self.data.srl_labels_inv, self.data.ner_labels_inv, self.config)
       if "srl" in predictions:
         srl_predictions.extend(predictions["srl"])
         # Evaluate retrieval.
