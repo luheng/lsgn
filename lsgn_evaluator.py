@@ -6,6 +6,7 @@ import coref_metrics
 import debug_utils
 import inference_utils
 from input_utils import pad_batch_tensors
+import operator
 import srl_eval_utils
 import util
 
@@ -63,12 +64,10 @@ class LSGNEvaluator(object):
       feed_dict = dict(zip(
           data.input_tensors,
           [pad_batch_tensors(doc_tensors, tn) for tn in data.input_names + data.label_names]))
-
       predict_names = []
       for tn in data.predict_names:
-         if tn in predictions:
+        if tn in predictions:
           predict_names.append(tn)
-
       predict_tensors = [predictions[tn] for tn in predict_names] + [loss]
       predict_tensors = session.run(predict_tensors, feed_dict=feed_dict)
       predict_dict = dict(zip(predict_names + ["loss"], predict_tensors))
@@ -76,10 +75,11 @@ class LSGNEvaluator(object):
       doc_size = len(doc_tensors)
       doc_example = self.coref_eval_data[i]
       sentences = doc_example["sentences"]
-      predictions = inference_utils.mtl_decode(
+      decoded_predictions = inference_utils.mtl_decode(
           sentences, predict_dict, data.srl_labels_inv, data.ner_labels_inv, self.config)
-      if "srl" in predictions:
-        srl_predictions.extend(predictions["srl"])
+
+      if "srl" in decoded_predictions:
+        srl_predictions.extend(decoded_predictions["srl"])
         # Evaluate retrieval.
         word_offset = 0
         for j in range(len(sentences)):
@@ -101,11 +101,11 @@ class LSGNEvaluator(object):
                 predict_dict["predicates"][j][:np], predict_dict["predicates"][j][:np], gold_preds, text_length,
                 predicate_evaluators)
           # TODO: Move elsewhere.
-          u_violations, c_violations, r_violations = debug_utils.srl_constraint_tracker(predictions["srl"][j])
+          u_violations, c_violations, r_violations = debug_utils.srl_constraint_tracker(decoded_predictions["srl"][j])
           unique_core_role_violations += u_violations
           continuation_role_violations += c_violations
           reference_role_violations += r_violations
-          total_num_predicates += len(predictions["srl"][j].keys())
+          total_num_predicates += len(decoded_predictions["srl"][j].keys())
           u_violations, c_violations, r_violations = debug_utils.srl_constraint_tracker(sent_example[1])
           gold_u_violations += u_violations
           gold_c_violations += c_violations
@@ -114,10 +114,10 @@ class LSGNEvaluator(object):
           sent_id += 1
           word_offset += text_length
 
-      if "ner" in predictions:
-        ner_predictions.extend(predictions["ner"])
+      if "ner" in decoded_predictions:
+        ner_predictions.extend(decoded_predictions["ner"])
 
-      if "predicted_clusters" in predictions:
+      if "predicted_clusters" in decoded_predictions:
         gold_clusters = [tuple(tuple(m) for m in gc) for gc in doc_example["clusters"]]
         gold_mentions = set([])
         mention_to_gold = {}
@@ -125,9 +125,9 @@ class LSGNEvaluator(object):
           for mention in gc:
             mention_to_gold[mention] = gc
             gold_mentions.add(mention)
-        coref_evaluator.update(predictions["predicted_clusters"], gold_clusters, predictions["mention_to_predicted"],
+        coref_evaluator.update(decoded_predictions["predicted_clusters"], gold_clusters, decoded_predictions["mention_to_predicted"],
                                mention_to_gold)
-        coref_predictions[doc_example["doc_key"]] = predictions["predicted_clusters"]
+        coref_predictions[doc_example["doc_key"]] = decoded_predictions["predicted_clusters"]
         
         # Evaluate retrieval.
         doc_text_length = sum([len(s) for s in sentences])

@@ -50,6 +50,8 @@ if __name__ == "__main__":
 
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
+  assert not ("final" in name)  # Make sure we don't override a finalized checkpoint.
+
   writer = tf.summary.FileWriter(log_dir, flush_secs=20)
   evaluated_checkpoints = set()
   max_f1 = 0

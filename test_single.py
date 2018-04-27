@@ -11,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from lsgn_data import LSGNData
+from lsgn_evaluator import LSGNEvaluator
 from srl_model import SRLModel
 import util
 
@@ -40,6 +41,7 @@ if __name__ == "__main__":
   util.print_config(config)
   data = LSGNData(config)
   model = SRLModel(data, config)
+  evaluator = LSGNEvaluator(config)
 
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
@@ -48,4 +50,4 @@ if __name__ == "__main__":
     checkpoint_path = os.path.join(log_dir, "model.max.ckpt")
     print "Evaluating {}".format(checkpoint_path)
     saver.restore(session, checkpoint_path)
-    model.evaluate(session, official_stdout=True)
+    evaluator.evaluate(session, data, model.predictions, model.loss)
