@@ -139,30 +139,20 @@ def get_span_emb(head_emb, context_outputs, span_starts, span_ends, config, drop
     span_text_emb = tf.gather(head_emb, span_indices)  # [num_spans, max_arg_width, emb]
     span_indices_log_mask = tf.log(
         tf.sequence_mask(span_width, max_arg_width, dtype=tf.float32)) # [num_spans, max_arg_width]
-    if not config["task_heads"]:
-      with tf.variable_scope("head_scores"):
-        head_scores = util.projection(context_outputs, num_heads)  # [num_words, num_heads]
-      span_attention = tf.nn.softmax(
-        tf.gather(head_scores, span_indices) + tf.expand_dims(span_indices_log_mask, 2),
-        dim=1)  # [num_spans, max_arg_width, num_heads]
-      span_head_emb = tf.reduce_sum(span_attention * span_text_emb, 1)  # [num_spans, emb]
-      '''else:
-        span_head_emb = (
-            tf.expand_dims(span_attention, 3) * tf.expand_dims(span_text_emb, 2)
-        )  # [num_spans, max_arg_width, num_heads, emb]
-        span_head_emb = tf.reduce_sum(span_head_emb, 1)  # [num_spans, num_heads, emb]
-        emb_size = util.shape(span_text_emb, 2)
-        span_head_emb = tf.reshape(span_head_emb, [num_spans, num_heads * emb_size])'''
-      span_emb_list.append(span_head_emb)
+    with tf.variable_scope("head_scores"):
+      head_scores = util.projection(context_outputs, num_heads)  # [num_words, num_heads]
+    span_attention = tf.nn.softmax(
+      tf.gather(head_scores, span_indices) + tf.expand_dims(span_indices_log_mask, 2),
+      dim=1)  # [num_spans, max_arg_width, num_heads]
+    span_head_emb = tf.reduce_sum(span_attention * span_text_emb, 1)  # [num_spans, emb]
+    span_emb_list.append(span_head_emb)
 
   span_emb = tf.concat(span_emb_list, 1) # [num_spans, emb]
-  # TODO: Add option to project spans.
   return span_emb, head_scores, span_text_emb, span_indices, span_indices_log_mask
 
 
 def get_unary_scores(span_emb, config, dropout, num_labels = 1, name="span_scores"):
   """Compute span score with FFNN(span embedding).
-  
   Args:
     span_emb: Tensor of [num_sentences, num_spans, emb].
   """
@@ -185,36 +175,12 @@ def get_srl_scores(arg_emb, pred_emb, arg_scores, pred_scores, num_labels, confi
   pred_emb_tiled = tf.tile(pred_emb_expanded, [1, num_args, 1, 1])  # [num_sents, num_args, num_preds, emb]
 
   pair_emb_list = [arg_emb_tiled, pred_emb_tiled]
-
-  # TODO: Change later.
-  if "new_srl_features" in config and config["new_srl_features"]:
-    if config["projection"] == "up":
-      pred_emb_proj = util.projection(pred_emb, util.shape(arg_emb, 2))  # [num_sents, num_preds, emb]
-      if dropout is not None:
-        pred_emb_proj = tf.nn.dropout(pred_emb_proj, dropout)
-      similarity_emb = arg_emb_expanded * tf.expand_dims(pred_emb_proj, 1)  # [num_sents, num_args, num_preds, emb]
-    else:
-      print "Projecting down."
-      arg_emb_proj = util.projection(arg_emb, util.shape(pred_emb, 2))  # [num_sents, num_args, emb]
-      if dropout is not None:
-        arg_emb_proj = tf.nn.dropout(arg_emb_proj, dropout)
-      similarity_emb = tf.expand_dims(arg_emb_proj, 2) * pred_emb_expanded  # [num_sents, num_args, num_preds, emb]
-    pair_emb_list.append(similarity_emb)
-
   pair_emb = tf.concat(pair_emb_list, 3)  # [num_sentences, num_args, num_preds, emb]
   pair_emb_size = util.shape(pair_emb, 3)
   flat_pair_emb = tf.reshape(pair_emb, [num_sentences * num_args * num_preds, pair_emb_size])
 
-  if "srl_ffnn_size" in config:
-    print "SRL FFNN size: {} X {}".format(config["srl_ffnn_depth"], config["srl_ffnn_size"])
-    with tf.variable_scope("predicate_argument_scores"):
-      flat_srl_scores = util.ffnn(
-          flat_pair_emb, config["srl_ffnn_depth"], config["srl_ffnn_size"], num_labels - 1, dropout
-      )  # [num_sentences, num_spans, num_labels] or [k, num_labels]
-  else:
-    flat_srl_scores = get_unary_scores(flat_pair_emb, config, dropout, num_labels - 1,
-        "predicate_argument_scores")  # [num_sentences * num_args * num_predicates, 1]
-
+  flat_srl_scores = get_unary_scores(flat_pair_emb, config, dropout, num_labels - 1,
+      "predicate_argument_scores")  # [num_sentences * num_args * num_predicates, 1]
   srl_scores = tf.reshape(flat_srl_scores, [num_sentences, num_args, num_preds, num_labels - 1])
   srl_scores += tf.expand_dims(tf.expand_dims(arg_scores, 2), 3) + tf.expand_dims(
       tf.expand_dims(pred_scores, 1), 3)  # [num_sentences, 1, max_num_preds, num_labels-1]
@@ -321,9 +287,7 @@ def get_span_task_labels(arg_starts, arg_ends, labels, max_sentence_length):
  
 
 def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_sentence_length, span_parents=None):
-  """
-  Utility function to get dense span or span-head labels.
-
+  """Utility function to get dense span or span-head labels.
   Args:
     span_starts: [num_sentences, max_num_spans]
     span_ends: [num_sentences, max_num_spans]
@@ -337,7 +301,6 @@ def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_se
  
   # For padded spans, we have starts = 1, and ends = 0, so they don't collide with any existing spans.
   span_starts += (1 - tf.sequence_mask(num_spans, dtype=tf.int32))  # [num_sentences, max_num_spans]
-  
   sentence_indices = tf.tile(
       tf.expand_dims(tf.range(num_sentences), 1),
       [1, max_num_spans])  # [num_sentences, max_num_spans]
@@ -357,13 +320,11 @@ def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_se
       sparse_values = tf.reshape(span_labels, [-1]),
       default_value = 0,
       validate_indices = False)  # [num_sentences, max_sent_len, max_sent_len]
-  
   return dense_labels
     
 
 def get_srl_softmax_loss(srl_scores, srl_labels, num_predicted_args, num_predicted_preds):
-  """
-  Softmax loss with 2-D masking.
+  """Softmax loss with 2-D masking.
   Args:
     srl_scores: [num_sentences, max_num_args, max_num_preds, num_labels]
     srl_labels: [num_sentences, max_num_args, max_num_preds]
@@ -391,8 +352,7 @@ def get_srl_softmax_loss(srl_scores, srl_labels, num_predicted_args, num_predict
 
 def get_srl_mixed_loss(srl_scores, srl_labels, num_predicted_args, num_predicted_preds,
                        num_adjunct_roles, num_core_roles):
-  """
-  Softmax loss with mixed normalization axis.
+  """(Unused) Softmax loss with mixed normalization axis.
   Args:
     srl_scores: [num_sentences, max_num_args, max_num_preds, num_labels]
     srl_labels: [num_sentences, max_num_args, max_num_preds]
@@ -407,7 +367,6 @@ def get_srl_mixed_loss(srl_scores, srl_labels, num_predicted_args, num_predicted
   preds_mask = tf.sequence_mask(num_predicted_preds, max_num_preds)  # [num_sentences, max_num_preds]
   pred_arg_mask = tf.logical_and(
       tf.expand_dims(args_mask, 2), tf.expand_dims(preds_mask, 1))  # [num_sentences, max_num_args, max_num_preds]
-
   dense_srl_labels = tf.one_hot(
       srl_labels, depth=num_labels, on_value=True, off_value=False, axis=3,
       dtype = tf.bool)  # [num_sents, max_num_args, max_num_preds, num_labels] 
@@ -443,9 +402,7 @@ def get_srl_mixed_loss(srl_scores, srl_labels, num_predicted_args, num_predicted
 
 
 def get_softmax_loss(scores, labels, candidate_mask):
-  """
-  Softmax loss with 1-D masking. (on Unary factors)
-
+  """Softmax loss with 1-D masking. (on Unary factors)
   Args:
     scores: [num_sentences, max_num_candidates, num_labels]
     labels: [num_sentences, max_num_candidates]

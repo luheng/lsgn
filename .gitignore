@@ -1,6 +1,7 @@
 *.pyc
 *.so
 *.jsonlines
+elmo
 logs
 chinese_logs
 arabic_logs
@@ -11,4 +12,5 @@ conll-2012
 *.hdf5
 *.v*_*_conll
 *.filtered
+*.iob2
 srlconll-1.1

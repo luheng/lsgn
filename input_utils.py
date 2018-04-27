@@ -28,6 +28,7 @@ def tensorize_srl_relations(tuples, label_dict, filter_v_args):
   return (np.array(heads), np.array(starts), np.array(ends),
           np.array([label_dict.get(c, 0) for c in labels]))
 
+
 def get_all_predicates(tuples):
   if len(tuples) > 0:
     predicates, _, _, _ = zip(*tuples)
@@ -109,3 +110,4 @@ def split_srl_labels(srl_labels):
     elif label != "V": #and label != "C-V":
       core_role_labels.append(label)
   return adjunct_role_labels, core_role_labels
+
