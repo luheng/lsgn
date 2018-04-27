@@ -10,7 +10,9 @@ import shutil
 
 import numpy as np
 import tensorflow as tf
-import srl_model as srl
+
+from lsgn_data import LSGNData
+from srl_model import SRLModel
 import util
 
 
@@ -41,7 +43,8 @@ if __name__ == "__main__":
     config["lm_path"] = config["lm_path_dev"]
 
   util.print_config(config)
-  model = srl.SRLModel(config)
+  data = LSGNData(config)
+  model = SRLModel(data, config)
 
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
