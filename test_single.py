@@ -9,7 +9,6 @@ import random
 
 import numpy as np
 import tensorflow as tf
-import coref_model as cm
 import srl_model as srl
 import util
 
