@@ -112,6 +112,31 @@ def compute_span_f1(gold_data, predictions, task_name):
   return prec, recall, f1, ul_prec, ul_recall, ul_f1, label_confusions
 
 
+def compute_unlabeled_span_f1(gold_data, predictions, task_name):
+  assert len(gold_data) == len(predictions)
+  total_gold = 0
+  total_predicted = 0
+  total_matched = 0
+  total_unlabeled_matched = 0
+  label_confusions = Counter()  # Counter of (gold, pred) label pairs.
+
+  for i in range(len(gold_data)):
+    gold = gold_data[i]
+    pred = predictions[i]
+    total_gold += len(gold)
+    total_predicted += len(pred)
+    for a0 in gold:
+      for a1 in pred:
+        if a0[0] == a1[0] and a0[1] == a1[1]:
+          total_unlabeled_matched += 1
+          label_confusions.update([(a0[2], a1[2]),])
+          if a0[2] == a1[2]:
+            total_matched += 1
+  prec, recall, f1 = _print_f1(total_gold, total_predicted, total_matched, task_name)
+  ul_prec, ul_recall, ul_f1 = _print_f1(total_gold, total_predicted, total_unlabeled_matched, "Unlabeled " + task_name)
+  return prec, recall, f1, ul_prec, ul_recall, ul_f1, label_confusions
+
+
 def compute_srl_f1(sentences, gold_srl, predictions, srl_conll_eval_path):
   assert len(gold_srl) == len(predictions)
   total_gold = 0

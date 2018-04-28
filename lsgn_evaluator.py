@@ -47,6 +47,8 @@ class LSGNEvaluator(object):
     ner_predictions = []
     coref_predictions = {}
     coref_evaluator = coref_metrics.CorefEvaluator()
+    all_gold_predicates = []
+    all_guessed_predicates = []
 
     start_time = time.time()
     debug_printer = debug_utils.DebugPrinter()
@@ -89,9 +91,16 @@ class LSGNEvaluator(object):
           sent_example = self.eval_data[sent_id]  # sentence, srl, ner
           gold_args = set([])
           gold_preds = set([])
+          guessed_preds = set([])
           for pred, args in sent_example[1].iteritems():
-            gold_preds.add((pred, pred))
-            gold_args.update([(a[0], a[1]) for a in args if a[2] not in ["V", "C-V"]])
+            if len(args) > 0:
+              gold_preds.add((pred, pred, "V"))
+              gold_args.update([(a[0], a[1]) for a in args if a[2] not in ["V", "C-V"]])
+          for pred, args in decoded_predictions["srl"][j].iteritems():
+            guessed_preds.add((pred, pred, "V"))
+          all_gold_predicates.append(gold_preds)
+          all_guessed_predicates.append(guessed_preds)
+
           srl_eval_utils.evaluate_retrieval(
                 predict_dict["candidate_starts"][j], predict_dict["candidate_ends"][j],
                 predict_dict["candidate_arg_scores"][j], predict_dict["arg_starts"][j][:na], predict_dict["arg_ends"][j][:na],
@@ -100,6 +109,7 @@ class LSGNEvaluator(object):
                 range(text_length), range(text_length), predict_dict["candidate_pred_scores"][j],
                 predict_dict["predicates"][j][:np], predict_dict["predicates"][j][:np], gold_preds, text_length,
                 predicate_evaluators)
+
           # TODO: Move elsewhere.
           u_violations, c_violations, r_violations = debug_utils.srl_constraint_tracker(decoded_predictions["srl"][j])
           unique_core_role_violations += u_violations
@@ -151,6 +161,8 @@ class LSGNEvaluator(object):
     if self.config["srl_weight"] > 0:
       precision, recall, f1, conll_precision, conll_recall, conll_f1, ul_prec, ul_recall, ul_f1, srl_label_mat, comp = (
           srl_eval_utils.compute_srl_f1(sentences, gold_srl, srl_predictions, self.config["srl_conll_eval_path"]))
+      pid_precision, pred_recall, pid_f1, _, _, _, _ = srl_eval_utils.compute_span_f1(
+          all_gold_predicates, all_guessed_predicates, "Predicate ID")
       task_to_f1["srl"] = conll_f1
       summary_dict["PAS F1"] = f1
       summary_dict["PAS precision"] = precision
