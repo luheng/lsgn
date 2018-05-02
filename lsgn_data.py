@@ -253,8 +253,6 @@ class LSGNData(object):
     word_offset = example["word_offset"]
     text_len = len(sentence)
 
-    #if self.lm_file and "tfhub" in self.config["lm_path"]:
-    #  lm_emb = load_lm_embeddings_from_hub(self.lm_file, sentence)
     lm_doc_key = None
     lm_sent_key = None  
     if self.lm_file and "ontonotes" in self.config["lm_path"]:

@@ -50,22 +50,6 @@ def load_lm_embeddings_for_sentence(lm_file, lm_layers, lm_size, doc_key, sent_k
     sentence = group[...]
   return sentence.transpose(1, 2, 0)
 
-# TODO: Doesn't work, remove later.
-def load_lm_embeddings_from_hub(lm_hub, sentence):
-  lm_embeddings = lm_hub(
-      inputs={
-          "tokens": [sentence],
-          "sequence_len": [len(sentence)]
-      },
-      signature="tokens",
-      as_dict=True)  # [1, slen, 512], or [1, slen, 1024]
-  word_emb = lm_embeddings["word_emb"]
-  stacked_embeddings = tf.concat([
-      tf.concat([word_emb, word_emb], 2),
-      lm_embeddings["lstm_outputs1"],
-      lm_embeddings["lstm_outputs2"]], 0)  # [3, slen, 1024]
-  return tf.transpose(stacked_embeddings, [1, 0, 2])
-
 
 def pad_batch_tensors(tensor_dicts, tensor_name):
   """
@@ -108,7 +92,7 @@ def split_srl_labels(srl_labels):
     if "AM" in label or "ARGM" in label:
       adjunct_role_labels.append(label)
     # TODO: comment out the label != C-V part for CoNLL 2012 models ... 
-    elif label != "V": #and label != "C-V":
+    elif label != "V" and label != "C-V":
       core_role_labels.append(label)
   return adjunct_role_labels, core_role_labels
 
