@@ -16,10 +16,10 @@ from srl_model import SRLModel
 import util
 
 if __name__ == "__main__":
-  if "GPU" in os.environ:
-    util.set_gpus(int(os.environ["GPU"]))
-  else:
-    util.set_gpus()
+  #if "GPU" in os.environ:
+  #  util.set_gpus(int(os.environ["GPU"]))
+  #else:
+  #  util.set_gpus()
 
   if len(sys.argv) > 1:
     name = sys.argv[1]
@@ -55,5 +55,6 @@ if __name__ == "__main__":
   with tf.Session() as session:
     checkpoint_path = os.path.join(log_dir, "model.max.ckpt")
     print "Evaluating {}".format(checkpoint_path)
+    tf.global_variables_initializer().run()
     saver.restore(session, checkpoint_path)
     evaluator.evaluate(session, data, model.predictions, model.loss)

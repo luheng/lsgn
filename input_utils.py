@@ -41,7 +41,7 @@ def load_lm_embeddings_for_sentence(lm_file, lm_layers, lm_size, doc_key, sent_k
   """ Load LM embeddings for given sentence.
   """
   if lm_file is None:
-    return np.zeros([0, lm_layers, lm_size])  # Num. words, ...
+    return np.zeros([0, lm_size, lm_layers])  # FIXME: dimensions are wrong? Num. words, ...
   file_key = doc_key.replace("/", ":")
   group = lm_file[file_key]
   if sent_key is not None:
@@ -50,7 +50,7 @@ def load_lm_embeddings_for_sentence(lm_file, lm_layers, lm_size, doc_key, sent_k
     sentence = group[...]
   return sentence.transpose(1, 2, 0)
 
-
+# TODO: Doesn't work, remove later.
 def load_lm_embeddings_from_hub(lm_hub, sentence):
   lm_embeddings = lm_hub(
       inputs={

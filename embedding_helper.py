@@ -3,10 +3,13 @@ import tensorflow as tf
 import util
 
 
-def get_embeddings(data, context_word_emb, head_word_emb, char_index, lm_emb, lexical_dropout):
+def get_embeddings(data, sentences, text_len, context_word_emb, head_word_emb, char_index, lm_emb,
+                   lexical_dropout):
   """Build word-level representations.
   Args:
     data: LSGNData object.
+    sentences: string tokens. [batch_size, max_len]
+    text_len: Length of each sentence. [batch_size]
     context_word_embeddings:
     head_word_embedding:
     char_index: Characters
@@ -34,13 +37,26 @@ def get_embeddings(data, context_word_emb, head_word_emb, char_index, lm_emb, le
     context_emb_list.append(aggregated_char_emb)
     head_emb_list.append(aggregated_char_emb)
 
-  if data.lm_file:
-    lm_emb_size = util.shape(lm_emb, 2)
-    lm_num_layers = util.shape(lm_emb, 3)
+  if data.lm_file or data.lm_hub:
+    # Alternatively, we could initialize module/aggregation/* from here. 
     with tf.variable_scope("lm_aggregation"):
       lm_weights = tf.nn.softmax(tf.get_variable("lm_scores", [data.lm_layers],
-                                      initializer=tf.constant_initializer(0.0)))
+                                 initializer=tf.constant_initializer(0.0)))
       lm_scaling = tf.get_variable("lm_scaling", [], initializer=tf.constant_initializer(1.0))
+
+    # Load lm_embeddings from hub.
+    if data.lm_hub:
+      lm_embeddings = data.lm_hub(
+        inputs={"tokens": sentences, "sequence_len": text_len},
+        signature="tokens", as_dict=True)
+      word_emb = tf.expand_dims(lm_embeddings["word_emb"], 3)  # [B, slen, 512]
+      lm_emb = tf.concat([
+          tf.concat([word_emb, word_emb], 2),  # [B, slen, 1024, 1]
+          tf.expand_dims(lm_embeddings["lstm_outputs1"], 3),
+          tf.expand_dims(lm_embeddings["lstm_outputs2"], 3)], 3)  # [B, slen, 1024, 3]
+
+    lm_emb_size = util.shape(lm_emb, 2)  # TODO: Might not need this.
+    lm_num_layers = util.shape(lm_emb, 3)
     flattened_lm_emb = tf.reshape(
         lm_emb, [num_sentences * max_sentence_length * lm_emb_size, lm_num_layers]
     )  # [num_sentences * max_sentence_length * emb, layers]
@@ -55,7 +71,7 @@ def get_embeddings(data, context_word_emb, head_word_emb, char_index, lm_emb, le
     lm_weights = None
     lm_scaling = None
 
-    # Concatenate and apply dropout.
+  # Concatenate and apply dropout.
   context_emb = tf.concat(context_emb_list, 2)  # [num_sentences, max_sentence_length, emb]
   head_emb = tf.concat(head_emb_list, 2)  # [num_sentences, max_sentence_length, emb]
   context_emb = tf.nn.dropout(context_emb, lexical_dropout)

@@ -48,10 +48,14 @@ if __name__ == "__main__":
   model = SRLModel(data, config)
   evaluator = LSGNEvaluator(config)
 
-  print tf.global_variables()
+  variables_to_restore = []
   for var in tf.global_variables():
-    print var, var.name
-  saver = tf.train.Saver()
+    if "module/" not in var.name:
+      variables_to_restore.append(var)
+    else:
+      print "Not restoring from checkpoint:", var.name
+
+  saver = tf.train.Saver(variables_to_restore)
   log_dir = config["log_dir"]
   assert not ("final" in name)  # Make sure we don't override a finalized checkpoint.
 
@@ -66,7 +70,7 @@ if __name__ == "__main__":
       ckpt = tf.train.get_checkpoint_state(log_dir)
       if ckpt and ckpt.model_checkpoint_path and ckpt.model_checkpoint_path not in evaluated_checkpoints:
         print "Evaluating {}".format(ckpt.model_checkpoint_path)
-
+        tf.global_variables_initializer().run()
         # Move it to a temporary location to avoid being deleted by the training supervisor.
         tmp_checkpoint_path = os.path.join(log_dir, "model.tmp.ckpt")
         copy_checkpoint(ckpt.model_checkpoint_path, tmp_checkpoint_path)

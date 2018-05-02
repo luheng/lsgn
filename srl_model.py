@@ -49,19 +49,17 @@ class SRLModel(object):
     self.dropout = 1 - (tf.to_float(is_training) * self.config["dropout_rate"])
     self.lexical_dropout = 1 - (tf.to_float(is_training) * self.config["lexical_dropout_rate"])
     self.lstm_dropout = 1 - (tf.to_float(is_training) * self.config["lstm_dropout_rate"])
-   
+  
+    sentences = inputs["tokens"] 
+    text_len = inputs["text_len"]  # [num_sentences]
     context_word_emb = inputs["context_word_emb"]  # [num_sentences, max_sentence_length, emb]
     head_word_emb = inputs["head_word_emb"]  # [num_sentences, max_sentence_length, emb]
     num_sentences = tf.shape(context_word_emb)[0]
     max_sentence_length = tf.shape(context_word_emb)[1]
-
     context_emb, head_emb, self.lm_weights, self.lm_scaling = get_embeddings(
-        self.data, context_word_emb, head_word_emb, inputs["char_idx"], inputs["lm_emb"],
-        self.lexical_dropout)  # [num_sentences, max_sentence_length, emb]
+        self.data, sentences, text_len, context_word_emb, head_word_emb, inputs["char_idx"],
+        inputs["lm_emb"], self.lexical_dropout)  # [num_sentences, max_sentence_length, emb]
     
-    text_len = inputs["text_len"]  # [num_sentences]
-    text_len_mask = tf.sequence_mask(text_len, maxlen=max_sentence_length)  # [num_sentences, max_sentence_length]
-
     context_outputs = lstm_contextualize(
         context_emb, text_len, self.config, self.lstm_dropout)  # [num_sentences, max_sentence_length, emb]
 
@@ -75,6 +73,7 @@ class SRLModel(object):
     flat_candidate_ends = tf.boolean_mask(
         tf.reshape(candidate_ends + batch_word_offset, [-1]), flat_candidate_mask)  # [num_candidates]
 
+    text_len_mask = tf.sequence_mask(text_len, maxlen=max_sentence_length)  # [num_sentences, max_sentence_length]
     flat_context_outputs = flatten_emb_by_sentence(context_outputs, text_len_mask)  # [num_doc_words]
     flat_head_emb = flatten_emb_by_sentence(head_emb, text_len_mask)  # [num_doc_words]
     doc_len = util.shape(flat_context_outputs, 0)

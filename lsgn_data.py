@@ -14,7 +14,7 @@ import srl_eval_utils
 
 # Names for the "given" tensors.
 _input_names = [
-    "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len", #"word_offset",
+    "tokens", "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len", #"word_offset",
     "speaker_ids", "genre", "doc_id", "is_training",
     "gold_predicates", "num_gold_predicates",
 ]
@@ -47,18 +47,19 @@ class LSGNData(object):
     self.char_embedding_size = config["char_embedding_size"]
     self.char_dict = util.load_char_dict(config["char_vocab_path"])
     self.genres = { g:i for i,g in enumerate(config["genres"]) }
-
+      
+    self.lm_file = None
+    self.lm_hub = None
+    self.lm_layers = 0  # TODO: Remove these.
+    self.lm_size = 0
     if config["lm_path"]:
       if "tfhub" in config["lm_path"]:
-        self.lm_file = hub.Module(config["lm_path"].encode("utf-8"), trainable=True) 
+        print "Using tensorflow hub:", config["lm_path"]
+        self.lm_hub = hub.Module(config["lm_path"].encode("utf-8"), trainable=False) 
       else:
         self.lm_file = h5py.File(self.config["lm_path"], "r")
       self.lm_layers = self.config["lm_layers"]
       self.lm_size = self.config["lm_size"]
-    else:
-      self.lm_file = None
-      self.lm_layers = 0
-      self.lm_size = 0
 
     self.adjunct_roles, self.core_roles = split_srl_labels(config["srl_labels"])
     self.srl_labels_inv  = [""] + self.adjunct_roles + self.core_roles
@@ -71,6 +72,7 @@ class LSGNData(object):
     # IO Stuff.
     # Need to make sure they are in the same order as input_names + label_names
     self.input_props = [
+        (tf.string, [None]), # String tokens.
         (tf.float32, [None, self.context_embeddings.size]), # Context embeddings.
         (tf.float32, [None, self.head_embeddings.size]), # Head embeddings.
         (tf.float32, [None, self.lm_size, self.lm_layers]), # LM embeddings.
@@ -105,7 +107,6 @@ class LSGNData(object):
     self.label_names = _label_names
     self.predict_names = _predict_names
     self.batch_size = self.config["batch_size"]
-
     dtypes, shapes = zip(*self.input_props)
     if self.batch_size > 0 and self.config["max_tokens_per_batch"] < 0:
       # Use fixed batch size if number of words per batch is not limited (-1).
@@ -120,7 +121,6 @@ class LSGNData(object):
       queue = tf.PaddingFIFOQueue(capacity=2, dtypes=dtypes, shapes=new_shapes)
       self.enqueue_op = queue.enqueue(self.queue_input_tensors)
       self.input_tensors = queue.dequeue()
-
     num_features = len(self.input_names)
     self.input_dict = dict(zip(self.input_names, self.input_tensors[:num_features]))
     self.labels_dict = dict(zip(self.label_names, self.input_tensors[num_features:]))
@@ -253,21 +253,21 @@ class LSGNData(object):
     word_offset = example["word_offset"]
     text_len = len(sentence)
 
-    # TODO: load dynamically?
-    if self.lm_file and "tfhub" in self.config["lm_path"]:
-      lm_emb = load_lm_embeddings_from_hub(self.lm_file, sentence)
+    #if self.lm_file and "tfhub" in self.config["lm_path"]:
+    #  lm_emb = load_lm_embeddings_from_hub(self.lm_file, sentence)
+    lm_doc_key = None
+    lm_sent_key = None  
+    if self.lm_file and "ontonotes" in self.config["lm_path"]:
+      idx = doc_key.rfind("_")
+      lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
+    elif self.lm_file and "conll05" in self.config["lm_path"]:
+      lm_doc_key = doc_key[1:]  # "S1234" -> "1234"
     else:
-      lm_doc_key = None
-      lm_sent_key = None  
-      if self.lm_file and "ontonotes" in self.config["lm_path"]:
-        idx = doc_key.rfind("_")
-        lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
-      elif self.lm_file and "conll05" in self.config["lm_path"]:
-        lm_doc_key = doc_key[1:]  # "S1234" -> "1234"
-      else:
-        lm_doc_key = doc_key
-        lm_sent_key = str(sent_id)
-      lm_emb = load_lm_embeddings_for_sentence(self.lm_file, self.lm_layers, self.lm_size, lm_doc_key, lm_sent_key)
+      lm_doc_key = doc_key
+      lm_sent_key = str(sent_id)
+    # Load cached LM.
+    lm_emb = load_lm_embeddings_for_sentence(
+        self.lm_file, self.lm_layers, self.lm_size, lm_doc_key, lm_sent_key)
 
     max_word_length = max(max(len(w) for w in sentence), max(self.config["filter_widths"]))
     context_word_emb = np.zeros([text_len, self.context_embeddings.size])
@@ -291,6 +291,7 @@ class LSGNData(object):
     gold_predicates = get_all_predicates(example["srl"]) - word_offset
     example_tensor = {
       # Inputs.
+      "tokens": sentence,
       "context_word_emb": context_word_emb,
       "head_word_emb": head_word_emb,
       "lm_emb": lm_emb,
@@ -322,7 +323,6 @@ class LSGNData(object):
       "coref_len": len(coref_starts)
     }
     return example_tensor
-
 
   def load_eval_data(self):
     eval_data = []
