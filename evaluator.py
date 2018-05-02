@@ -48,6 +48,9 @@ if __name__ == "__main__":
   model = SRLModel(data, config)
   evaluator = LSGNEvaluator(config)
 
+  print tf.global_variables()
+  for var in tf.global_variables():
+    print var, var.name
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
   assert not ("final" in name)  # Make sure we don't override a finalized checkpoint.

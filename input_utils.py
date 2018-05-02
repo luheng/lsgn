@@ -37,22 +37,6 @@ def get_all_predicates(tuples):
   return np.unique(predicates)
   
 
-def load_lm_embeddings(lm_file, lm_layers, lm_size, doc_key, sent_keys):
-  """ Load LM embeddings.
-  """
-  if lm_file is None:
-    return np.zeros([0, 0, lm_layers, lm_size])
-  file_key = doc_key.replace("/", ":")
-  group = lm_file[file_key]
-  num_sentences = len(list(group.keys()))
-  #sentences = [group[str(i)][...] for i in range(num_sentences)]
-  sentences = [group[sk][...] for sk in sent_keys]
-  lm_emb = np.zeros([num_sentences, max(s.shape[1] for s in sentences), lm_size, lm_layers])
-  for i, s in enumerate(sentences):
-    lm_emb[i, :s.shape[1], :, :] = s.transpose(1, 2, 0)
-  return lm_emb
-
-
 def load_lm_embeddings_for_sentence(lm_file, lm_layers, lm_size, doc_key, sent_key):
   """ Load LM embeddings for given sentence.
   """
@@ -65,6 +49,22 @@ def load_lm_embeddings_for_sentence(lm_file, lm_layers, lm_size, doc_key, sent_k
   else:
     sentence = group[...]
   return sentence.transpose(1, 2, 0)
+
+
+def load_lm_embeddings_from_hub(lm_hub, sentence):
+  lm_embeddings = lm_hub(
+      inputs={
+          "tokens": [sentence],
+          "sequence_len": [len(sentence)]
+      },
+      signature="tokens",
+      as_dict=True)  # [1, slen, 512], or [1, slen, 1024]
+  word_emb = lm_embeddings["word_emb"]
+  stacked_embeddings = tf.concat([
+      tf.concat([word_emb, word_emb], 2),
+      lm_embeddings["lstm_outputs1"],
+      lm_embeddings["lstm_outputs2"]], 0)  # [3, slen, 1024]
+  return tf.transpose(stacked_embeddings, [1, 0, 2])
 
 
 def pad_batch_tensors(tensor_dicts, tensor_name):

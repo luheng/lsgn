@@ -1,3 +1,6 @@
+import tensorflow as tf
+import tensorflow_hub as hub
+
 import h5py
 import json
 import numpy as np
@@ -46,7 +49,10 @@ class LSGNData(object):
     self.genres = { g:i for i,g in enumerate(config["genres"]) }
 
     if config["lm_path"]:
-      self.lm_file = h5py.File(self.config["lm_path"], "r")
+      if "tfhub" in config["lm_path"]:
+        self.lm_file = hub.Module(config["lm_path"].encode("utf-8"), trainable=True) 
+      else:
+        self.lm_file = h5py.File(self.config["lm_path"], "r")
       self.lm_layers = self.config["lm_layers"]
       self.lm_size = self.config["lm_size"]
     else:
@@ -247,17 +253,22 @@ class LSGNData(object):
     word_offset = example["word_offset"]
     text_len = len(sentence)
 
-    lm_doc_key = None
-    lm_sent_key = None
-    if self.lm_file and "ontonotes" in self.config["lm_path"]:
-      idx = doc_key.rfind("_")
-      lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
-    elif self.lm_file and "conll05" in self.config["lm_path"]:
-      lm_doc_key = doc_key[1:]  # "S1234" -> "1234"
+    # TODO: load dynamically?
+    if self.lm_file and "tfhub" in self.config["lm_path"]:
+      lm_emb = load_lm_embeddings_from_hub(self.lm_file, sentence)
     else:
-      lm_doc_key = doc_key
-      lm_sent_key = str(sent_id)
-    lm_emb = load_lm_embeddings_for_sentence(self.lm_file, self.lm_layers, self.lm_size, lm_doc_key, lm_sent_key)
+      lm_doc_key = None
+      lm_sent_key = None  
+      if self.lm_file and "ontonotes" in self.config["lm_path"]:
+        idx = doc_key.rfind("_")
+        lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
+      elif self.lm_file and "conll05" in self.config["lm_path"]:
+        lm_doc_key = doc_key[1:]  # "S1234" -> "1234"
+      else:
+        lm_doc_key = doc_key
+        lm_sent_key = str(sent_id)
+      lm_emb = load_lm_embeddings_for_sentence(self.lm_file, self.lm_layers, self.lm_size, lm_doc_key, lm_sent_key)
+
     max_word_length = max(max(len(w) for w in sentence), max(self.config["filter_widths"]))
     context_word_emb = np.zeros([text_len, self.context_embeddings.size])
     head_word_emb = np.zeros([text_len, self.head_embeddings.size])

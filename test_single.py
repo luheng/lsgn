@@ -43,7 +43,13 @@ if __name__ == "__main__":
   model = SRLModel(data, config)
   evaluator = LSGNEvaluator(config)
 
-  saver = tf.train.Saver()
+  variables_to_restore = []
+  for var in tf.global_variables():
+    print var.name
+    if "module/" not in var.name:
+      variables_to_restore.append(var)
+
+  saver = tf.train.Saver(variables_to_restore)
   log_dir = config["log_dir"]
 
   with tf.Session() as session:
