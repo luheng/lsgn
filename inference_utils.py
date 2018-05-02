@@ -83,7 +83,8 @@ def greedy_decode(predict_dict, srl_labels_inv):
   return pred_to_args, num_suppressed_args 
   
 
-_CORE_ARGS = { "ARG0": 1, "ARG1": 2, "ARG2": 4, "ARG3": 8, "ARG4": 16, "ARG5": 32, "ARGA": 64 }
+_CORE_ARGS = { "ARG0": 1, "ARG1": 2, "ARG2": 4, "ARG3": 8, "ARG4": 16, "ARG5": 32, "ARGA": 64,
+               "A0": 1, "A1": 2, "A2": 4, "A3": 8, "A4": 16, "A5": 32, "AA": 64 }
 
 def dp_decode(predict_dict, srl_labels_inv):
   """Decode arguments with dynamic programming. Enforce two constraints:

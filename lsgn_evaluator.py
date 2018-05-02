@@ -93,12 +93,13 @@ class LSGNEvaluator(object):
           gold_preds = set([])
           guessed_preds = set([])
           for pred, args in sent_example[1].iteritems():
-            if len(args) > 0:
-              gold_preds.add((pred, pred, "V"))
-              gold_args.update([(a[0], a[1]) for a in args if a[2] not in ["V", "C-V"]])
+            filtered_args = [(a[0], a[1]) for a in args if a[2] not in ["V", "C-V"]]
+            if len(filtered_args) > 0:
+              gold_preds.add((pred, pred))
+              gold_args.update(filtered_args)
           for pred, args in decoded_predictions["srl"][j].iteritems():
             guessed_preds.add((pred, pred, "V"))
-          all_gold_predicates.append(gold_preds)
+          all_gold_predicates.append([(p[0], p[1], "V") for p in gold_preds])
           all_guessed_predicates.append(guessed_preds)
 
           srl_eval_utils.evaluate_retrieval(

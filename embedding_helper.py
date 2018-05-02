@@ -51,6 +51,9 @@ def get_embeddings(data, context_word_emb, head_word_emb, char_index, lm_emb, le
         flattened_aggregated_lm_emb, [num_sentences, max_sentence_length, lm_emb_size])
     aggregated_lm_emb *= lm_scaling
     context_emb_list.append(aggregated_lm_emb)
+  else:
+    lm_weights = None
+    lm_scaling = None
 
     # Concatenate and apply dropout.
   context_emb = tf.concat(context_emb_list, 2)  # [num_sentences, max_sentence_length, emb]
