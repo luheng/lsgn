@@ -274,12 +274,12 @@ def print_to_conll(sentences, srl_labels, output_filename, gold_predicates):
 
   fout.close()
 
+
 def print_to_iob2(sentences, gold_ner, pred_ner, gold_file_path):
   """Print to IOB2 format for NER eval. 
   """
   # Write NER prediction to IOB format.
   temp_file_path = "/tmp/ner_pred_%d.tmp" % os.getpid()
-
   # Read IOB tags from preprocessed gold path.
   gold_info = [[]]
   if gold_file_path:
@@ -292,7 +292,6 @@ def print_to_iob2(sentences, gold_ner, pred_ner, gold_file_path):
         gold_info[-1].append(line.split())
   else:
     fgold = None
-
   fout = codecs.open(temp_file_path, "w", "utf-8")
   for sent_id, words in enumerate(sentences):
     pred_tags = ["O" for _ in words]
@@ -313,8 +312,8 @@ def print_to_iob2(sentences, gold_ner, pred_ner, gold_file_path):
       fout.write(w + " " + gt + " " + pt + "\n")
     fout.write("\n")
   fout.close()
-
-  child = subprocess.Popen('./ner/bin/conlleval < {}'.format(temp_file_path), shell=True, stdout=subprocess.PIPE)
+  child = subprocess.Popen('./ner/bin/conlleval < {}'.format(temp_file_path),
+                           shell=True, stdout=subprocess.PIPE)
   eval_info = child.communicate()[0]
   print eval_info
 
