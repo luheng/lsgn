@@ -61,7 +61,8 @@ class LSGNData(object):
       self.lm_layers = self.config["lm_layers"]
       self.lm_size = self.config["lm_size"]
 
-    self.adjunct_roles, self.core_roles = split_srl_labels(config["srl_labels"])
+    self.adjunct_roles, self.core_roles = split_srl_labels(
+        config["srl_labels"], config["include_c_v"])
     self.srl_labels_inv  = [""] + self.adjunct_roles + self.core_roles
     self.srl_labels = { l:i for i,l in enumerate(self.srl_labels_inv) }
     self.const_labels = { l:i for i,l in enumerate([""] + config["const_labels"]) }
