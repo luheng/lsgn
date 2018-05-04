@@ -14,6 +14,7 @@ def tensorize_labeled_spans(tuples, label_dict):
   return np.array(starts), np.array(ends), np.array(labels)
 
 
+# FIXME
 def tensorize_srl_relations(tuples, label_dict, filter_v_args):
   # Removing V-V self-loop.
   if filter_v_args: 
@@ -84,14 +85,12 @@ def populate_sentence_offset(examples):
     sent_offset += len(example["sentences"])
 
 
-# FIXME ...
 def split_srl_labels(srl_labels, include_c_v):
   adjunct_role_labels = []
   core_role_labels = []
   for label in srl_labels:
     if "AM" in label or "ARGM" in label:
       adjunct_role_labels.append(label)
-    # TODO: comment out the label != C-V part for CoNLL 2012 models ... 
     elif label != "V" and (include_c_v or label != "C-V"):
       core_role_labels.append(label)
   return adjunct_role_labels, core_role_labels
