@@ -2,8 +2,9 @@
 
 ### Requirements
 * Python 2.7
-  * TensorFlow 1.4.0
+  * TensorFlow 1.8.0
   * pyhocon (for parsing the configurations)
+  * tensorflow_hub (for ELMo)
 
 ### Setting Up
 
