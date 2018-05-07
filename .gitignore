@@ -6,6 +6,7 @@ logs
 chinese_logs
 arabic_logs
 conll-2012
+scientifickg
 *.vec
 *.txt
 *.txt.filtered
