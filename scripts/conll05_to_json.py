@@ -9,8 +9,9 @@ import tempfile
 import subprocess
 import collections
 
-import util
-import conll
+
+def flatten(l):
+  return [item for sublist in l for item in sublist]
 
 
 class DocumentState(object):
@@ -102,12 +103,11 @@ class DocumentState(object):
       else:
         merged_clusters.append(set(c1))
     merged_clusters = [list(c) for c in merged_clusters]
-    all_mentions = util.flatten(merged_clusters)
+    all_mentions = flatten(merged_clusters)
     assert len(all_mentions) == len(set(all_mentions))
     assert len(self.sentences) == len(self.srl)
     assert len(self.sentences) == len(self.constituents)
     assert len(self.sentences) == len(self.ner)
-
     return {
       "doc_key": self.doc_key,
       "sentences": self.sentences,
@@ -151,7 +151,6 @@ def handle_bit(word_index, bit, stack, spans, label_set):
 
 def handle_line(line, document_state, language, num_cols, labels, stats):
   # document_state.assert_empty()
-  # document_state.doc_key = conll.get_doc_key(begin_document_match.group(1), begin_document_match.group(2))
   # return None
   row = line.split()
   # Starting a new sentence.
@@ -241,7 +240,7 @@ def minimize_partition(input_path, output_path, num_cols, labels, stats):
 if __name__ == "__main__":
   labels = collections.defaultdict(set)
   stats = collections.defaultdict(int)
-  minimize_partition(sys.argv[1], sys.argv[2], int(sys.argv[3], labels, stats)
+  minimize_partition(sys.argv[1], sys.argv[2], int(sys.argv[3]), labels, stats)
   #minimize_partition("dev", "english", "05_conll", labels, stats)
   #minimize_partition("train", "english", "05_conll", labels, stats)
   #minimize_partition("test_wsj", "english", "05_conll", labels, stats)

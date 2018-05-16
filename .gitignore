@@ -1,6 +1,7 @@
 *.pyc
 *.so
 *.jsonlines
+data
 elmo
 logs
 chinese_logs

@@ -4,11 +4,11 @@ if [ ! -d "data/embeddings" ]; then
   mkdir -p "data/embeddings"
 fi
 
-cd data/embeddings
-wget http://nlp.stanford.edu/data/glove.840B.300d.zip
-unzip glove.840B.300d.zip
-rm glove.840B.300d.zip
-cd $OLDPWD
+#cd data/embeddings
+#wget http://nlp.stanford.edu/data/glove.840B.300d.zip
+#unzip glove.840B.300d.zip
+#rm glove.840B.300d.zip
+#cd $OLDPWD
 
 SRLPATH="./data/srl"
 if [ ! -d $SRLPATH ]; then
