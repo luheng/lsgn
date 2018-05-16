@@ -7,18 +7,16 @@ dlx() {
 }
 
 conll_url=http://conll.cemantix.org/2012/download
-dlx $conll_url conll-2012-train.v4.tar.gz
-dlx $conll_url conll-2012-development.v4.tar.gz
-dlx $conll_url/test conll-2012-test-key.tar.gz
-dlx $conll_url/test conll-2012-test-official.v9.tar.gz
-
-dlx $conll_url conll-2012-scripts.v3.tar.gz
-
-dlx http://conll.cemantix.org/download reference-coreference-scorers.v8.01.tar.gz
-mv reference-coreference-scorers conll-2012/scorer
+#dlx $conll_url conll-2012-train.v4.tar.gz
+#dlx $conll_url conll-2012-development.v4.tar.gz
+#dlx $conll_url/test conll-2012-test-key.tar.gz
+#dlx $conll_url/test conll-2012-test-official.v9.tar.gz
+#dlx $conll_url conll-2012-scripts.v3.tar.gz
+#dlx http://conll.cemantix.org/download reference-coreference-scorers.v8.01.tar.gz
+#mv reference-coreference-scorers conll-2012/scorer
 
 ontonotes_path=/home/luheng/Data/ontonotes-release-5.0
-bash conll-2012/v3/scripts/skeleton2conll.sh -D $ontonotes_path/data/files/data conll-2012
+#bash conll-2012/v3/scripts/skeleton2conll.sh -D $ontonotes_path/data/files/data conll-2012
 
 function compile_partition() {
     rm -f $2.$5.$3$4
@@ -35,7 +33,6 @@ compile_language english
 #compile_language chinese
 #compile_language arabic
 
-python minimize.py
-python get_char_vocab.py
-
-python filter_embeddings.py glove.840B.300d.txt train.english.jsonlines dev.english.jsonlines test.english.jsonlines
+python scripts/minimize.py
+python scripts/get_char_vocab.py
+python scripts/filter_embeddings.py glove.840B.300d.txt train.english.jsonlines dev.english.jsonlines test.english.jsonlines

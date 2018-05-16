@@ -9,8 +9,17 @@ import tempfile
 import subprocess
 import collections
 
-import util
-import conll
+
+BEGIN_DOCUMENT_REGEX = re.compile(r"#begin document \((.*)\); part (\d+)")
+
+
+def flatten(l):
+  return [item for sublist in l for item in sublist]
+
+
+def get_doc_key(doc_id, part):
+  return "{}_{}".format(doc_id, int(part))
+
 
 class DocumentState(object):
   def __init__(self):
@@ -101,13 +110,11 @@ class DocumentState(object):
       else:
         merged_clusters.append(set(c1))
     merged_clusters = [list(c) for c in merged_clusters]
-    all_mentions = util.flatten(merged_clusters)
+    all_mentions = flatten(merged_clusters)
     assert len(all_mentions) == len(set(all_mentions))
-
     assert len(self.sentences) == len(self.srl)
     assert len(self.sentences) == len(self.constituents)
     assert len(self.sentences) == len(self.ner)
-
     return {
       "doc_key": self.doc_key,
       "sentences": self.sentences,
@@ -165,10 +172,10 @@ def handle_bit(word_index, bit, stack, spans, label_set):
 
 
 def handle_line(line, document_state, language, labels, stats):
-  begin_document_match = re.match(conll.BEGIN_DOCUMENT_REGEX, line)
+  begin_document_match = re.match(BEGIN_DOCUMENT_REGEX, line)
   if begin_document_match:
     document_state.assert_empty()
-    document_state.doc_key = conll.get_doc_key(begin_document_match.group(1), begin_document_match.group(2))
+    document_state.doc_key = get_doc_key(begin_document_match.group(1), begin_document_match.group(2))
     return None
   elif line.startswith("#end document"):
     document_state.assert_finalizable()
@@ -188,7 +195,7 @@ def handle_line(line, document_state, language, labels, stats):
       return None
     assert len(row) >= 12
 
-    doc_key = conll.get_doc_key(row[0], row[1])
+    doc_key = get_doc_key(row[0], row[1])
     word = normalize_word(row[3], language)
     parse = row[5]
     lemma = row[6]
@@ -229,9 +236,7 @@ def handle_line(line, document_state, language, labels, stats):
     return None
 
 
-def minimize_partition(name, language, extension, labels, stats):
-  input_path = "{}.{}.{}".format(name, language, extension)
-  output_path = "{}.{}.jsonlines".format(name, language)
+def minimize_partition(input_path, output_path, language, labels, stats):
   count = 0
   print "Minimizing {}".format(input_path)
   with open(input_path, "r") as input_file:
@@ -247,20 +252,14 @@ def minimize_partition(name, language, extension, labels, stats):
   print "Wrote {} documents to {}".format(count, output_path)
 
 
-def minimize_language(language, labels, stats):
-  minimize_partition("dev", language, "v4_gold_conll", labels, stats)
-  minimize_partition("train", language, "v4_gold_conll", labels, stats)
-  minimize_partition("test", language, "v4_gold_conll", labels, stats)
-  #minimize_partition("conll12test", language, "v5_gold_conll", labels, stats)
-
-
 if __name__ == "__main__":
   labels = collections.defaultdict(set)
   stats = collections.defaultdict(int)
-  minimize_language("english", labels, stats)
-  #minimize_language("chinese", labels, stats)
-  #minimize_language("arabic", labels, stats)
-  for k, v in labels.items():
-    print("{} = [{}]".format(k, ", ".join("\"{}\"".format(label) for label in v)))
-  for k, v in stats.items():
-    print("{} = {}".format(k, v))
+  input_path = sys.argv[1]
+  output_path = sys.argv[2]
+  minimize_partition(input_path, output_path, "english", labels, stats)
+  #minimize_language("english", labels, stats)
+  #for k, v in labels.items():
+  #  print("{} = [{}]".format(k, ", ".join("\"{}\"".format(label) for label in v)))
+  #for k, v in stats.items():
+  #  print("{} = {}".format(k, v))
