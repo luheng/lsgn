@@ -4,6 +4,7 @@ import util
 
 import srl_ops
 
+
 def flatten_emb(emb):
   num_sentences = tf.shape(emb)[0]
   max_sentence_length = tf.shape(emb)[1]
@@ -73,7 +74,7 @@ def lstm_contextualize(text_emb, text_len, config, lstm_dropout):
 
 
 def get_span_candidates(text_len, max_sentence_length, max_mention_width):
-  """
+  """Get a list of candidate spans up to length W.
   Args:
     text_len: Tensor of [num_sentences,]
     max_sentence_length: Integer scalar.
@@ -101,7 +102,6 @@ def get_span_candidates(text_len, max_sentence_length, max_mention_width):
 
 def get_span_emb(head_emb, context_outputs, span_starts, span_ends, config, dropout):
   """Compute span representation shared across tasks.
-   
   Args:
     head_emb: Tensor of [num_words, emb]
     context_outputs: Tensor of [num_words, emb]
@@ -298,7 +298,6 @@ def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_se
   """
   num_sentences = util.shape(span_starts, 0)
   max_num_spans = util.shape(span_starts, 1)
- 
   # For padded spans, we have starts = 1, and ends = 0, so they don't collide with any existing spans.
   span_starts += (1 - tf.sequence_mask(num_spans, dtype=tf.int32))  # [num_sentences, max_num_spans]
   sentence_indices = tf.tile(
@@ -324,7 +323,7 @@ def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_se
     
 
 def get_srl_softmax_loss(srl_scores, srl_labels, num_predicted_args, num_predicted_preds):
-  """Softmax loss with 2-D masking.
+  """Softmax loss with 2-D masking (for SRL).
   Args:
     srl_scores: [num_sentences, max_num_args, max_num_preds, num_labels]
     srl_labels: [num_sentences, max_num_args, max_num_preds]
@@ -347,57 +346,6 @@ def get_srl_softmax_loss(srl_scores, srl_labels, num_predicted_args, num_predict
   loss = tf.boolean_mask(loss, tf.reshape(srl_loss_mask, [-1]))
   loss.set_shape([None])
   loss = tf.reduce_sum(loss)
-  return loss
-
-
-def get_srl_mixed_loss(srl_scores, srl_labels, num_predicted_args, num_predicted_preds,
-                       num_adjunct_roles, num_core_roles):
-  """(Unused) Softmax loss with mixed normalization axis.
-  Args:
-    srl_scores: [num_sentences, max_num_args, max_num_preds, num_labels]
-    srl_labels: [num_sentences, max_num_args, max_num_preds]
-    num_predicted_args: [num_sentences]
-    num_predicted_preds: [num_sentences]
-  """
-  num_sentences = util.shape(srl_scores, 0)
-  max_num_args = util.shape(srl_scores, 1)
-  max_num_preds = util.shape(srl_scores, 2)
-  num_labels = util.shape(srl_scores, 3)
-  args_mask = tf.sequence_mask(num_predicted_args, max_num_args)  # [num_sentences, max_num_args]
-  preds_mask = tf.sequence_mask(num_predicted_preds, max_num_preds)  # [num_sentences, max_num_preds]
-  pred_arg_mask = tf.logical_and(
-      tf.expand_dims(args_mask, 2), tf.expand_dims(preds_mask, 1))  # [num_sentences, max_num_args, max_num_preds]
-  dense_srl_labels = tf.one_hot(
-      srl_labels, depth=num_labels, on_value=True, off_value=False, axis=3,
-      dtype = tf.bool)  # [num_sents, max_num_args, max_num_preds, num_labels] 
-
-  # adjunct_scores/labels: [num_sents, max_num_args, max_num_preds, 1+num_adjunct_roles]
-  # core_scores/labels: [num_sents, max_num_args, max_num_preds, num_core_roles]
-  adjunct_scores, core_scores = tf.split(srl_scores, [num_adjunct_roles+1, num_core_roles], 3)
-  adjunct_labels, core_labels = tf.split(dense_srl_labels, [num_adjunct_roles+1, num_core_roles], 3)
-
-  #core_scores += tf.expand_dims(tf.expand_dims(tf.log(tf.to_float(args_mask)), 2), 3)
-  dummy_scores = tf.zeros([num_sentences, 1, max_num_preds, num_core_roles], tf.float32)
-  core_scores = tf.concat([dummy_scores, core_scores], 1)  # [num_sents, 1+max_num_args, max_num_preds, num_core_roles]
-  dummy_labels = tf.logical_not(tf.reduce_any(core_labels, 1, keep_dims=True))  # [num_sens, 1, max_num_preds, num_core_roles]
-  core_labels = tf.concat([dummy_labels, core_labels], 1)  # [num_sents, 1+max_num_args, max_num_preds, num_core_roles]
-  
-  core_loss0 = tf.nn.softmax_cross_entropy_with_logits(
-      labels=core_labels, logits=core_scores, dim=1,
-      name="srl_core_loss")  # [num_sentences, max_num_preds, num_core_roles]
-  print tf.shape(args_mask), tf.shape(core_scores), tf.shape(core_labels), tf.shape(core_loss0)
-  core_loss0 = tf.reduce_sum(core_loss0, 2)  # [num_sentences, max_num_preds]
-  core_loss = tf.boolean_mask(core_loss0, preds_mask)
-  core_loss.set_shape([None])
-
-  adjunct_loss = tf.nn.softmax_cross_entropy_with_logits(
-      labels=adjunct_labels, logits=adjunct_scores, dim=3,
-      name="srl_adjunct_loss")  # [num_sentences, max_num_args, max_num_preds]
-  adjunct_loss = tf.boolean_mask(adjunct_loss, pred_arg_mask)
-  adjunct_loss.set_shape([None])
-
-  core_loss_Print = tf.Print(core_loss, [core_loss0, core_loss, adjunct_loss], "Loss")
-  loss = tf.reduce_sum(core_loss) + tf.reduce_sum(adjunct_loss)
   return loss
 
 
@@ -428,6 +376,7 @@ def get_coref_softmax_loss(antecedent_scores, antecedent_labels):
 
 def get_antecedent_scores(top_span_emb, top_span_mention_scores, antecedents, top_span_speaker_ids, genre_emb,
                           config, dropout, reuse=False):
+  """For coreference only."""
   k = util.shape(top_span_emb, 0)
   max_antecedents = util.shape(antecedents, 1)
   feature_emb_list = []
@@ -454,7 +403,6 @@ def get_antecedent_scores(top_span_emb, top_span_mention_scores, antecedents, to
 
   feature_emb = tf.concat(feature_emb_list, 2)  # [k, max_ant, emb]
   feature_emb = tf.nn.dropout(feature_emb, dropout)  # [k, max_ant, emb]
-
   antecedent_emb = tf.gather(top_span_emb, antecedents)  # [k, max_ant, emb]
   target_emb = tf.expand_dims(top_span_emb, 1)  # [k, 1, emb]
   similarity_emb = antecedent_emb * target_emb  # [k, max_ant, emb]
@@ -470,7 +418,7 @@ def get_antecedent_scores(top_span_emb, top_span_mention_scores, antecedents, to
 
 
 def bucket_distance(distances):
-  """
+  """For coreference only:
   Places the given values (designed for distances) into 10 semi-logscale buckets:
   [0, 1, 2, 3, 4, 5-7, 8-15, 16-31, 32-63, 64+].
   """

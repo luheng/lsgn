@@ -8,15 +8,14 @@ import numpy as np
 
 import tensorflow as tf
 
-import coref_model as cm
 import inference_utils
 import input_utils
 import srl_model as srl
 import util
 
+
 if __name__ == "__main__":
   util.set_gpus()
-
   name = sys.argv[1]
   output_filename = sys.argv[2]
 
@@ -25,11 +24,8 @@ if __name__ == "__main__":
   config["log_dir"] = util.mkdirs(os.path.join(config["log_root"], name))
 
   util.print_config(config)
-  #model = cm.CorefModel(config)
   model = srl.SRLModel(config)
-
   model.load_eval_data()
-
   saver = tf.train.Saver()
   log_dir = config["log_dir"]
 
@@ -86,7 +82,5 @@ if __name__ == "__main__":
         #print doc_example
         f.write(json.dumps(doc_example))
         f.write("\n")
-
         if (i + 1) % 10 == 0:
-          print "Decoded {} examples.".format(i + 1)
-          #break
+          print "Decoded {} documents.".format(i + 1)

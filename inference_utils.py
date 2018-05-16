@@ -86,6 +86,7 @@ def greedy_decode(predict_dict, srl_labels_inv):
 _CORE_ARGS = { "ARG0": 1, "ARG1": 2, "ARG2": 4, "ARG3": 8, "ARG4": 16, "ARG5": 32, "ARGA": 64,
                "A0": 1, "A1": 2, "A2": 4, "A3": 8, "A4": 16, "A5": 32, "AA": 64 }
 
+
 def dp_decode(predict_dict, srl_labels_inv):
   """Decode arguments with dynamic programming. Enforce two constraints:
   1. Non-overlapping constraint.
@@ -232,6 +233,7 @@ def _decode_non_overlapping_spans(starts, ends, scores, max_len, labels_inv, pre
         flags[k] = True
   return new_spans
 
+
 def _dp_decode_non_overlapping_spans(starts, ends, scores, max_len, labels_inv, pred_id, u_constraint=False):
   num_roles = scores.shape[1]
   labels = np.argmax(scores, axis=1)
@@ -294,8 +296,6 @@ def _dp_decode_non_overlapping_spans(starts, ends, scores, max_len, labels_inv, 
     t = t0
     rs = rs0
 
-  #print spans
-  #print new_spans[::-1]
   return new_spans[::-1]
 
 
@@ -350,30 +350,15 @@ def mtl_decode(sentences, predict_dict, srl_labels_inv, ner_labels_inv, config):
       if not curr_span in mention_to_predicted:
         mention_to_predicted[curr_span] = cluster_id
         predicted_clusters[cluster_id].append(curr_span)
-      '''else:
-        cluster_id2 = mention_to_predicted[curr_span]
-        # Merge clusters.
-        if cluster_id != cluster_id2:
-          print "Merging clusters:", predicted_clusters[cluster_id], predicted_clusters[cluster_id2]
-          for span in predicted_clusters[cluster_id2]:
-            mention_to_predicted[span] = cluster_id
-            predicted_clusters[cluster_id].append(span)
-          predicted_clusters[cluster_id2] = []'''
 
     scores = predict_dict["antecedent_scores"]
     antecedents = predict_dict["antecedents"]
-    #if config["coref_loss"] == "mention_rank":
     for i, ant_label in enumerate(np.argmax(scores, axis=1)):
       if ant_label <= 0:
         continue
       ant_id = antecedents[i][ant_label - 1]
       assert i > ant_id
       _link_mentions(mention_spans[i], mention_spans[ant_id])
-    '''else:
-      for i, curr_span in enumerate(mention_spans):
-        for j in range(1, scores.shape[1]):
-          if scores[i][j] > 0:
-            _link_mentions(curr_span, mention_spans[antecedents[i][j-1]])'''
 
     predicted_clusters = [tuple(sorted(pc)) for pc in predicted_clusters]
     predictions["predicted_clusters"] = predicted_clusters
@@ -381,10 +366,5 @@ def mtl_decode(sentences, predict_dict, srl_labels_inv, ner_labels_inv, config):
 
   #print predictions["srl"]
   return predictions  
-
-  
-   
-  
-          
  
-
+      

@@ -15,6 +15,7 @@ from lsgn_evaluator import LSGNEvaluator
 from srl_model import SRLModel
 import util
 
+
 if __name__ == "__main__":
   #if "GPU" in os.environ:
   #  util.set_gpus(int(os.environ["GPU"]))
