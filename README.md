@@ -6,6 +6,18 @@
   * pyhocon (for parsing the configurations)
   * tensorflow_hub (for ELMo)
 
+## Getting Started
+### Prerequisites:
+* Python 2.7
+* TensorFlow 1.8.0
+* pyhocon (for parsing the configurations)
+* tensorflow_hub (for ELMo)
+
+* sudo apt-get install tcsh (Only required for processing CoNLL05 data)
+* [Git Large File Storage] (https://git-lfs.github.com/): Required to download the large model files. Alternatively, you could get the models [here](https://drive.google.com/drive/folders/0B5zHXdvxrsjNZUx2YXJ5cEM0TW8?usp=sharing)
+* [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
+`./scripts/fetch_required_data.sh`
+
 ### Setting Up
 
 * Download pretrained word embeddings and build custom kernels by running `setup_all.sh`.
@@ -14,6 +26,16 @@
   * To use the pretrained model only, run `setup_pretrained.sh`
   * To train your own models, run `setup_training.sh`
     * This assumes access to OntoNotes 5.0. Please edit the `ontonotes_path` variable.
+
+## CoNLL Data
+For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
+
+### CoNLL-2005
+The data is provided by:
+[CoNLL-2005 Shared Task](http://www.lsi.upc.edu/~srlconll/soft.html),
+but the original words are from the Penn Treebank dataset, which is not publicly available.
+If you have the PTB corpus, you can run:  
+` ./scripts/fetch_and_make_conll05_data.sh  /path/to/ptb/`  
 
 ## Training Instructions
 
