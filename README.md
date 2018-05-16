@@ -37,6 +37,12 @@ but the original words are from the Penn Treebank dataset, which is not publicly
 If you have the PTB corpus, you can run:  
 ` ./scripts/fetch_and_make_conll05_data.sh  /path/to/ptb/`  
 
+### CoNLL-2012
+You have to follow the instructions below to get CoNLL-2012 data
+[CoNLL-2012](http://cemantix.org/data/ontonotes.html), this would result in a directory called `/path/to/conll-formatted-ontonotes-5.0`.
+Run:  
+`./scripts/make_conll2012_data.sh /path/to/conll-formatted-ontonotes-5.0`
+
 ## Training Instructions
 
 * Experiment configurations are found in `experiments.conf`
