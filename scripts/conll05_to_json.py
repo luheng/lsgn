@@ -12,6 +12,7 @@ import collections
 import util
 import conll
 
+
 class DocumentState(object):
   def __init__(self):
     self.doc_key = None
@@ -103,7 +104,6 @@ class DocumentState(object):
     merged_clusters = [list(c) for c in merged_clusters]
     all_mentions = util.flatten(merged_clusters)
     assert len(all_mentions) == len(set(all_mentions))
-
     assert len(self.sentences) == len(self.srl)
     assert len(self.sentences) == len(self.constituents)
     assert len(self.sentences) == len(self.ner)
@@ -149,10 +149,10 @@ def handle_bit(word_index, bit, stack, spans, label_set):
     spans.append((open_index, word_index, label))
 
 
-def handle_line(line, document_state, language, labels, stats):
-  #  document_state.assert_empty()
-  #  document_state.doc_key = conll.get_doc_key(begin_document_match.group(1), begin_document_match.group(2))
-  #  return None
+def handle_line(line, document_state, language, num_cols, labels, stats):
+  # document_state.assert_empty()
+  # document_state.doc_key = conll.get_doc_key(begin_document_match.group(1), begin_document_match.group(2))
+  # return None
   row = line.split()
   # Starting a new sentence.
   if len(row) == 0:
@@ -169,15 +169,17 @@ def handle_line(line, document_state, language, labels, stats):
     stats["num_mentions"] += sum(len(c) for c in finalized_state["clusters"])
     return finalized_state
 
-  assert len(row) >= 2
-  #assert len(row) >= 6
+  assert len(row) >= num_cols + 1
 
   word = normalize_word(row[0], language)
-  parse = "*" # row[2]
-  ner = "*" # row[3]
-  lemma = row[1] # row[5]
-  args = row[2:] # row[6:]
-  predicate_sense = "-" if lemma == "-" else "0" #row[4]'''
+  parse = "*" if num_cols < 2 else row[2]
+  ner = "*" if num_cols < 2 else row[3]
+  lemma = row[1] if num_cols < 2 else row[5]
+  args = row[2:] if num_cols < 2 else row[6:]
+  if num_cols < 2:
+    predicate_sense = "-" if lemma == "-" else "0"
+  else:
+    predicate_sense = row[4]
 
   speaker = "-"
   coref = "-"
@@ -217,17 +219,16 @@ def handle_line(line, document_state, language, labels, stats):
   return None
 
 
-def minimize_partition(name, language, extension, labels, stats):
-  input_path = "{}.{}.{}".format(name, language, extension)
-  output_path = "{}.{}.conll05.jsonlines".format(name, language)
+def minimize_partition(input_path, output_path, num_cols, labels, stats):
   count = 0
+  language = "english"
   print "Minimizing {}".format(input_path)
   with open(input_path, "r") as input_file:
     with open(output_path, "w") as output_file:
       document_state = DocumentState()
       document_state.doc_key = "S{}".format(count)
       for line in input_file.readlines():
-        document = handle_line(line, document_state, language, labels, stats)
+        document = handle_line(line, document_state, language, num_cols, labels, stats)
         if document is not None:
           output_file.write(json.dumps(document))
           output_file.write("\n")
@@ -236,15 +237,17 @@ def minimize_partition(name, language, extension, labels, stats):
           document_state.doc_key = "S{}".format(count)
   print "Wrote {} documents to {}".format(count, output_path)
 
+
 if __name__ == "__main__":
   labels = collections.defaultdict(set)
   stats = collections.defaultdict(int)
+  minimize_partition(sys.argv[1], sys.argv[2], int(sys.argv[3], labels, stats)
   #minimize_partition("dev", "english", "05_conll", labels, stats)
   #minimize_partition("train", "english", "05_conll", labels, stats)
-  minimize_partition("test_wsj", "english", "05_conll", labels, stats)
-  minimize_partition("test_brown", "english", "05_conll", labels, stats)
+  #minimize_partition("test_wsj", "english", "05_conll", labels, stats)
+  #minimize_partition("test_brown", "english", "05_conll", labels, stats)
+  #for k, v in labels.items():
+  #  print("{} = [{}]".format(k, ", ".join("\"{}\"".format(label) for label in v)))
+  #for k, v in stats.items():
+  #  print("{} = {}".format(k, v))
 
-  for k, v in labels.items():
-    print("{} = [{}]".format(k, ", ".join("\"{}\"".format(label) for label in v)))
-  for k, v in stats.items():
-    print("{} = {}".format(k, v))

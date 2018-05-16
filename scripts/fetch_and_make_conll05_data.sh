@@ -75,14 +75,23 @@ zcat "${CONLL05_PATH}/test.brown/props/test.brown.props.gz" > "${SRLPATH}/conll0
 zcat "${CONLL05_PATH}/train-set.gz" > "${CONLL05_PATH}/train-set"
 zcat "${CONLL05_PATH}/dev-set.gz" > "${CONLL05_PATH}/dev-set"
 
-# Convert CoNLL format to seq2seq.
-python process_conll05.py "${CONLL05_PATH}/train-set" "${SRLPATH}/conll05.train.txt" \
-  "${SRLPATH}/conll05.propid.train.txt" 5
-python process_conll05.py "${CONLL05_PATH}/dev-set" "${SRLPATH}/conll05.devel.txt" \
-  "${SRLPATH}/conll05.propid.devel.txt" 5
-python process_conll05.py "${CONLL05_PATH}/test-wsj" "${SRLPATH}/conll05.test.wsj.txt" \
-  "${SRLPATH}/conll05.propid.test.wsj.txt" 1
-python process_conll05.py "${CONLL05_PATH}/test-brown" "${SRLPATH}/conll05.test.brown.txt" \
-  "${SRLPATH}/conll05.propid.test.brown.txt" 1
+# Convert CoNLL to json format.
+python scripts/conll05_to_json.py "${CONLL05_PATH}/train-set" \
+  "${SRLPATH}/train.english.conll05.jsonlines" 5
+python scripts/conll05_to_json.py "${CONLL05_PATH}/dev-set" \
+  "${SRLPATH}/dev.english.conll05.jsonlines" 5
+python scripts/conll05_to_json.py "${CONLL05_PATH}/test-wsj" \
+  "${SRLPATH}/test_wsj.english.conll05.jsonlines" 1
+python scripts/conll05_to_json.py "${CONLL05_PATH}/test-brown" \
+  "${SRLPATH}/test_brown.english.conll05.jsonlines" 1
+
+#python preprocess/process_conll05.py "${CONLL05_PATH}/train-set" "${SRLPATH}/conll05.train.txt" \
+#  "${SRLPATH}/conll05.propid.train.txt" 5
+#python preprocess/process_conll05.py "${CONLL05_PATH}/dev-set" "${SRLPATH}/conll05.devel.txt" \
+#  "${SRLPATH}/conll05.propid.devel.txt" 5
+#python preprocess/process_conll05.py "${CONLL05_PATH}/test-wsj" "${SRLPATH}/conll05.test.wsj.txt" \
+#  "${SRLPATH}/conll05.propid.test.wsj.txt" 1
+#python preprocess/process_conll05.py "${CONLL05_PATH}/test-brown" "${SRLPATH}/conll05.test.brown.txt" \
+#  "${SRLPATH}/conll05.propid.test.brown.txt" 1
 
 
