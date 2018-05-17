@@ -3,9 +3,13 @@
 ONTONOTES_PATH=$1
 
 SRL_PATH="./data/srl"
+if [ ! -d $SRL_PATH ]; then
+  mkdir -p $SRL_PATH
+fi
 
-if [ ! -d $SRLPATH ]; then
-  mkdir -p $SRLPATH
+EMB_PATH="./embeddings"
+if [ ! -d $EMB_PATH ]; then
+  mkdir -p $EMB_PATH
 fi
 
 
@@ -49,6 +53,6 @@ python scripts/filter_conll2012_data.py ${SRL_PATH}/conll12test.english.v5.jsonl
   ${SRL_PATH}/conll12.test.id \
   ${SRL_PATH}/test.english.mtl.jsonlines
 
-
-#python scripts/get_char_vocab.py
-#python filter_embeddings.py glove.840B.300d.txt train.english.jsonlines dev.english.jsonlines test.english.jsonlines
+python scripts/filter_embeddings.py ${EMB_PATH}/glove.840B.300d.txt \
+  ${EMB_PATH}/glove.840B.300d.v5.filtered \
+  ${SRL_PATH}/train.english.v5.jsonlines ${SRL_PATH}/dev.english.v5.jsonlines 
