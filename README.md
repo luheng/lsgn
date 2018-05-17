@@ -7,7 +7,6 @@
   * tensorflow_hub (for ELMo)
 
 ## Getting Started
-### Setting Up:
 * Python 2.7
 * TensorFlow 1.8.0
 * pyhocon (for parsing the configurations)
@@ -16,9 +15,11 @@
 * sudo apt-get install tcsh (Only required for processing CoNLL05 data)
 * [Git Large File Storage] (https://git-lfs.github.com/): Required to download the large model files. Alternatively, you could get the models [here](https://drive.google.com/drive/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk?usp=sharing)
 * [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
-`./scripts/fetch_required_data.sh`
-`./scripts/build_custom_kernels.sh` (Please make adjustments to the script based on your OS/gcc version)
+`./scripts/fetch_required_data.sh` 
+* Build kernels: `./scripts/build_custom_kernels.sh` (Please make adjustments to the script based on your OS/gcc version)
 
+## Setting up for ELMo
+(todo)
 
 ## CoNLL Data
 For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
