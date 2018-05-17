@@ -7,25 +7,18 @@
   * tensorflow_hub (for ELMo)
 
 ## Getting Started
-### Prerequisites:
+### Setting Up:
 * Python 2.7
 * TensorFlow 1.8.0
 * pyhocon (for parsing the configurations)
 * tensorflow_hub (for ELMo)
 
 * sudo apt-get install tcsh (Only required for processing CoNLL05 data)
-* [Git Large File Storage] (https://git-lfs.github.com/): Required to download the large model files. Alternatively, you could get the models [here](https://drive.google.com/drive/folders/0B5zHXdvxrsjNZUx2YXJ5cEM0TW8?usp=sharing)
+* [Git Large File Storage] (https://git-lfs.github.com/): Required to download the large model files. Alternatively, you could get the models [here](https://drive.google.com/drive/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk?usp=sharing)
 * [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
 `./scripts/fetch_required_data.sh`
+`./scripts/build_custom_kernels.sh` (Please make adjustments to the script based on your OS/gcc version)
 
-### Setting Up
-
-* Download pretrained word embeddings and build custom kernels by running `setup_all.sh`.
-  * There are 3 platform-dependent ways to build custom TensorFlow kernels. Please comment/uncomment the appropriate lines in the script.
-* Run one of the following:
-  * To use the pretrained model only, run `setup_pretrained.sh`
-  * To train your own models, run `setup_training.sh`
-    * This assumes access to OntoNotes 5.0. Please edit the `ontonotes_path` variable.
 
 ## CoNLL Data
 For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
