@@ -15,4 +15,5 @@ scientifickg
 *.v*_*_conll
 *.filtered
 *.iob2
+*.tar.gz
 srlconll-1.1
