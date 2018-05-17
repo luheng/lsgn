@@ -3,6 +3,7 @@
 import sys
 import json
 
+
 def get_char_vocab(input_filenames, output_filename):
   vocab = set()
   for filename in input_filenames:
@@ -17,9 +18,6 @@ def get_char_vocab(input_filenames, output_filename):
       f.write(u"{}\n".format(char).encode("utf8"))
   print("Wrote {} characters to {}".format(len(vocab), output_filename))
 
-def get_char_vocab_language(language):
-  get_char_vocab(["{}.{}.jsonlines".format(partition, language) for partition in ("train", "dev", "test")], "char_vocab.{}.txt".format(language))
 
-get_char_vocab_language("english")
-get_char_vocab_language("chinese")
-get_char_vocab_language("arabic")
+get_char_vocab(["{}.english.mtl.jsonlines".format(partition, language) for partition in ("train", "dev", "test")], "char_vocab.english.txt")
+
