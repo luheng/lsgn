@@ -2,6 +2,7 @@
 *.so
 *.jsonlines
 data
+embeddings
 elmo
 logs
 chinese_logs
@@ -15,4 +16,5 @@ scientifickg
 *.v*_*_conll
 *.filtered
 *.iob2
+*.tar.gz
 srlconll-1.1

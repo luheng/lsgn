@@ -5,20 +5,20 @@ import json
 
 
 if __name__ == "__main__":
-  if len(sys.argv) < 3:
-    sys.exit("Usage: {} <embeddings> <json1> <json2> ...".format(sys.argv[0]))
+  if len(sys.argv) < 4:
+    sys.exit("Usage: {} <embeddings> <filtered_embeddings> <json1> <json2> ...".format(sys.argv[0]))
 
   words_to_keep = set()
-  for json_filename in sys.argv[2:]:
+  for json_filename in sys.argv[3:]:
     with open(json_filename) as json_file:
       for line in json_file.readlines():
         for sentence in json.loads(line)["sentences"]:
           words_to_keep.update(sentence)
 
-  print "Found {} words in {} dataset(s).".format(len(words_to_keep), len(sys.argv) - 2)
+  print "Found {} words in {} dataset(s).".format(len(words_to_keep), len(sys.argv) - 3)
   total_lines = 0
   kept_lines = 0
-  out_filename = "{}.v5.filtered".format(sys.argv[1])
+  out_filename = sys.argv[2]
   with open(sys.argv[1]) as in_file:
     with open(out_filename, "w") as out_file:
       for line in in_file.readlines():
