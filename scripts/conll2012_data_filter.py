@@ -40,6 +40,7 @@ with codecs.open(v4_input_file, "r", "utf8") as f:
 print ("Documents: {}\nSentences: {}\nWords: {}\nNER: {}, PAS: {}, Clusters: {}".format(
     doc_count, sentence_count, word_count, ner_count, srl_count, cluster_count))
 
+
 doc_count = 0
 sentence_count = 0
 srl_count = 0
@@ -53,7 +54,6 @@ with codecs.open(v5_input_file, "r", "utf8") as f:
       continue
     example_id = doc_to_example[doc_key]
     v4_examples[example_id]["srl"] = example["srl"]
-
     sentences = example["sentences"]
     word_count += sum([len(s) for s in sentences])
     sentence_count += len(sentences)
@@ -63,7 +63,6 @@ with codecs.open(v5_input_file, "r", "utf8") as f:
 
 print ("Documents: {}\nSentences: {}\nWords: {}\nNER: {}, PAS: {}, Clusters: {}".format(
     doc_count, sentence_count, word_count, ner_count, srl_count, cluster_count))
-
 
 with codecs.open(output_file, "w", "utf8") as f:
   for example in v4_examples:
