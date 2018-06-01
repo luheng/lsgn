@@ -29,6 +29,8 @@ This repository contains code and models for replicating results from the follow
 * It is recommended to cache ELMo embeddings for training and validating efficiency. Instructions will be added soon.
 
 ## Making Predictions with Pretrained Models
+* Please see `data/sample.jsonlines` for input format (json). Each json object can contain multiple sentences. 
+* For example, run `python decoder.py conll2012_final data/sample.jsonlines sample.out` to predict SRL structures.
 
 ## CoNLL Data
 For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
@@ -55,7 +57,7 @@ Run:
   * `python evaluator.py <experiment>`
 * Results are stored in the `logs` directory and can be viewed via TensorBoard.
 * For final evaluation of the checkpoint with the maximum dev F1:
-  * Run `python test_single.py <experiment>` for the single-model evaluation.
+  * Run `python test_single.py <experiment>` for the single-model evaluation. For example: `python test_single.py conll2012_final`
 
 ## Other Quirks
 
