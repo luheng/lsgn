@@ -32,6 +32,15 @@ Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e
 ## Making Predictions with Pretrained Models
 * Please see `data/sample.jsonlines` for input format (json). Each json object can contain multiple sentences. 
 * For example, run `python decoder.py conll2012_final data/sample.jsonlines sample.out` to predict SRL structures.
+* The output will also be in json format, with an additional array storing the SRL tuples. For example, for the following input sentences:
+
+`[["John", "told", "Pat", "to", "stop", "the", "robot", "immediately", "."], ["Pat", "refused", "."]]`
+
+The following json object 
+
+`"predicted_srl": [[1, 0, 0, "ARG0"], [1, 2, 2, "ARG2"], [1, 3, 7, "ARG1"], [4, 2, 2, "ARG0"], [4, 5, 6, "ARG1"], [4, 7, 7, "ARGM-TMP"], [10, 9, 9, "ARG0"]]` 
+
+contains SRL predictions for the two sentences, formatted as `[predicate_position, argument_span_start, argument_end, role_label]`. The token ids are counted starting 0 from the beginning of the document (instead of the beginning of each sentence).
 
 ## CoNLL Data
 For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
