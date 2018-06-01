@@ -1,10 +1,16 @@
-# Labeled Span Graph Network
+# Labeled Span Graph Network (Under Construction)
+
+This repository contains code and models for replicating results from the following publication:
+* [Jointly Predicting Predicates and Arguments in Neural Semantic Role Labeling](https://arxiv.org/abs/1805.04787)
+* [Luheng He](https://homes.cs.washington.edu/~luheng), [Kenton Lee](http://kentonl.com/), [Omer Levy](https://levyomer.wordpress.com/) and [Luke Zettlemoyer](https://www.cs.washington.edu/people/faculty/lsz)
+* In ACL 2018
+* Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e-coref)
 
 ### Requirements
 * Python 2.7
   * TensorFlow 1.8.0
   * pyhocon (for parsing the configurations)
-  * tensorflow_hub (for ELMo)
+  * [tensorflow_hub](https://www.tensorflow.org/hub/) (for loading ELMo)
 
 ## Getting Started
 * Python 2.7
@@ -13,13 +19,18 @@
 * tensorflow_hub (for ELMo)
 
 * sudo apt-get install tcsh (Only required for processing CoNLL05 data)
-* [Git Large File Storage] (https://git-lfs.github.com/): Required to download the large model files. Alternatively, you could get the models [here](https://drive.google.com/drive/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk?usp=sharing)
 * [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
 `./scripts/fetch_required_data.sh` 
 * Build kernels: `./scripts/build_custom_kernels.sh` (Please make adjustments to the script based on your OS/gcc version)
+* Download [pretrained models](https://drive.google.com/drive/u/0/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk). Please extract the models into `./logs`. Git-lfs support will be coming soon.
 
-## Setting up for ELMo
-(todo)
+## Setting up for ELMo (in progress)
+* Some of our models are trained with the [ELMo embeddings](https://allennlp.org/elmo). We use the ELMo model loaded by [tensorflow_hub](https://www.tensorflow.org/hub/modules/google/elmo/1).
+* It is recommended to cache ELMo embeddings for training and validating efficiency. Instructions will be added soon.
+
+## Making Predictions with Pretrained Models
+* Please see `data/sample.jsonlines` for input format (json). Each json object can contain multiple sentences. 
+* For example, run `python decoder.py conll2012_final data/sample.jsonlines sample.out` to predict SRL structures.
 
 ## CoNLL Data
 For replicating results on CoNLL-2005 and CoNLL-2012 datasets, please follow the steps below.
@@ -40,16 +51,16 @@ Run:
 ## Training Instructions
 
 * Experiment configurations are found in `experiments.conf`
-* Choose an experiment that you would like to run, e.g. `best`
+* Choose an experiment that you would like to run, e.g. `conll2012_best`
 * For a single-machine experiment, run the following two commands:
   * `python singleton.py <experiment>`
   * `python evaluator.py <experiment>`
 * Results are stored in the `logs` directory and can be viewed via TensorBoard.
 * For final evaluation of the checkpoint with the maximum dev F1:
-  * Run `python test_single.py <experiment>` for the single-model evaluation.
+  * Run `python test_single.py <experiment>` for the single-model evaluation. For example: `python test_single.py conll2012_final`
 
 ## Other Quirks
 
 * It does not use GPUs by default. Instead, it looks for the `GPU` environment variable, which the code treats as shorthand for `CUDA_VISIBLE_DEVICES`.
 * The evaluator should not be run on GPUs, since evaluating full documents does not fit within GPU memory constraints.
-* The training runs indefinitely and needs to be terminated manually. The model generally converges at about 400k steps and within 48 hours.
+* The training runs indefinitely and needs to be terminated manually. The model generally converges at about 300k steps and within 48 hours.
