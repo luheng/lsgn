@@ -4,7 +4,8 @@ This repository contains code and models for replicating results from the follow
 * [Jointly Predicting Predicates and Arguments in Neural Semantic Role Labeling](https://arxiv.org/abs/1805.04787)
 * [Luheng He](https://homes.cs.washington.edu/~luheng), [Kenton Lee](http://kentonl.com/), [Omer Levy](https://levyomer.wordpress.com/) and [Luke Zettlemoyer](https://www.cs.washington.edu/people/faculty/lsz)
 * In ACL 2018
-* Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e-coref)
+
+Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e-coref). 
 
 ### Requirements
 * Python 2.7
