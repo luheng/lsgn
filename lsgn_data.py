@@ -15,7 +15,8 @@ import srl_eval_utils
 # Names for the "given" tensors.
 _input_names = [
     "tokens", "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len", #"word_offset",
-    "speaker_ids", "genre", "doc_id", "is_training",
+    "speaker_ids", "genre", 
+    "doc_id", "is_training",
     "gold_predicates", "num_gold_predicates",
 ]
 
@@ -30,11 +31,11 @@ _label_names = [
 # Name for predicted tensors.
 _predict_names = [
     "candidate_starts", "candidate_ends", "candidate_arg_scores", "candidate_pred_scores",
-    "arg_starts", "arg_ends", "predicates", "num_args", "num_preds", "arg_labels", "srl_scores", "ner_scores",
-    "const_scores", "arg_scores", "pred_scores",
+    "arg_starts", "arg_ends", "predicates", "num_args", "num_preds", "arg_labels", "srl_scores",
+    "ner_scores", "const_scores", "arg_scores", "pred_scores",
     "candidate_mention_starts", "candidate_mention_ends", "candidate_mention_scores", "mention_starts",
     "mention_ends", "antecedents", "antecedent_scores",
-    "srl_head_scores", "coref_head_scores", "ner_head_scores", "entity_gate", "antecedent_attn"
+    "srl_head_scores" #, "coref_head_scores", "ner_head_scores", "entity_gate", "antecedent_attn"
 ]
 
 
@@ -65,6 +66,7 @@ class LSGNData(object):
         config["srl_labels"], config["include_c_v"])
     self.srl_labels_inv  = [""] + self.adjunct_roles + self.core_roles
     self.srl_labels = { l:i for i,l in enumerate(self.srl_labels_inv) }
+    
     self.const_labels = { l:i for i,l in enumerate([""] + config["const_labels"]) }
     self.const_labels_inv = [""] + config["const_labels"]
     self.ner_labels = { l:i for i,l in enumerate([""] + config["ner_labels"]) }
@@ -81,7 +83,7 @@ class LSGNData(object):
         (tf.int32, []),  # Text length.
         (tf.int32, [None]),  # Speaker IDs.
         (tf.int32, []),  # Genre.
-        # (tf.int32, []),  # Word offset.
+        (tf.int32, []),  # Word offset.
         (tf.int32, []),  # Document ID.
         (tf.bool, []),  # Is training.
         (tf.int32, [None]),  # Gold predicate ids (for input).
@@ -94,7 +96,7 @@ class LSGNData(object):
         (tf.int32, [None]),  # Constituent starts.
         (tf.int32, [None]),  # Constituent ends.
         (tf.int32, [None]),  # Constituent labels.
-        (tf.int32, []),  # Number of  constituent spans.
+        (tf.int32, []),  # Number of constituent spans.
         (tf.int32, [None]),  # NER starts.
         (tf.int32, [None]),  # NER ends.
         (tf.int32, [None]),  # NER labels.
