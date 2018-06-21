@@ -8,7 +8,7 @@ from os.path import join
 import subprocess
 
 
-_SRL_CONLL_EVAL_SCRIPT  = "run_conll_eval.sh"
+_SRL_CONLL_EVAL_SCRIPT  = "scripts/run_conll_eval.sh"
 
 
 def split_example_for_eval(example):

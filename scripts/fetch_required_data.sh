@@ -6,7 +6,7 @@ if [ ! -d $EMB_PATH ]; then
   mkdir -p $EMB_PATH
 fi
 
-cd embeddings
+cd $EMB_PATH
 wget http://nlp.stanford.edu/data/glove.840B.300d.zip
 unzip glove.840B.300d.zip
 rm glove.840B.300d.zip

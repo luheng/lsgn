@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 SRL_PATH="./data/srl"
 

@@ -18,7 +18,7 @@ Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e
 * [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
 `./scripts/fetch_required_data.sh` 
 * Build kernels: `./scripts/build_custom_kernels.sh` (Please make adjustments to the script according to your OS/gcc version)
-* Download [pretrained models](https://drive.google.com/drive/u/0/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk). Please extract the models into `./logs`. Git-lfs support will be coming soon.
+* Download [pretrained models](https://drive.google.com/drive/u/0/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk) by running `./scripts/fetch_all_models.sh` 
 
 ## Setting up for ELMo (in progress)
 * Some of our models are trained with the [ELMo embeddings](https://allennlp.org/elmo). We use the ELMo model loaded by [tensorflow_hub](https://www.tensorflow.org/hub/modules/google/elmo/1).

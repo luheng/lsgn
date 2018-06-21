@@ -8,7 +8,6 @@ import random
 import tensorflow as tf
 
 import util
-import conll
 from lsgn_data import LSGNData
 
 from embedding_helper import get_embeddings
