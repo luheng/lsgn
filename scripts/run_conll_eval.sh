@@ -2,8 +2,6 @@
 
 CONLL_PATH="./data/srl/srlconll-1.1"
 
-pwd
-
 export PERL5LIB="${CONLL_PATH}/lib:$PERL5LIB"
 export PATH="${CONLL_PATH}/bin:$PATH"
 
