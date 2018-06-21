@@ -5,7 +5,6 @@ import sys
 import time
 import json
 import numpy as np
-
 import tensorflow as tf
 
 import inference_utils
@@ -25,10 +24,8 @@ if __name__ == "__main__":
   print "Running experiment: {}.".format(name)
   config = util.get_config("experiments.conf")[name]
   config["log_dir"] = util.mkdirs(os.path.join(config["log_root"], name))
-
   print "Loading data from: {}.".format(input_filename)
   config["eval_path"] = input_filename
-
   config["batch_size"] = -1
   config["max_tokens_per_batch"] = -1
 
@@ -62,41 +59,26 @@ if __name__ == "__main__":
         feed_dict = dict(zip(
             data.input_tensors,
             [input_utils.pad_batch_tensors(doc_tensors, tn) for tn in data.input_names + data.label_names]))
-
         predict_names = []
         for tn in data.predict_names:
            if tn in model.predictions:
             predict_names.append(tn)
-
         predict_tensors = [model.predictions[tn] for tn in predict_names] + [model.loss]
         predict_tensors = session.run(predict_tensors, feed_dict=feed_dict)
         predict_dict = dict(zip(predict_names + ["loss"], predict_tensors))
-
         doc_example = doc_level_eval_data[i]
         sentences = doc_example["sentences"]
-        predictions = inference_utils.mtl_decode(sentences, predict_dict, data.srl_labels_inv,
-                                                 data.ner_labels_inv, config)
-
-        #predicted_antecedents = model_utils.get_predicted_antecedents(antecedents, antecedent_scores)
-        #example["predicted_clusters"], _ = model.get_predicted_clusters(mention_starts, mention_ends, predicted_antecedents)
-        #doc_example["predicted_clusters"] = []
-        #for cluster in predictions["predicted_clusters"]:
-        #  doc_example["predicted_clusters"].append(tuple([(int(m[0]), int(m[1])) for m in cluster]))
-        #mention_starts = predict_dict["mention_starts"]
-        #mention_ends = predict_dict["mention_ends"]
-        #doc_example["top_spans"] = zip((int(i) for i in mention_starts), (int(i) for i in mention_ends))
-        #doc_example["head_scores"] = predict_dict["coref_head_scores"].tolist()
-
-        # SRL and NER stuff. Maybe flatten to doc level.
+        predictions = inference_utils.srl_decode(
+            sentences, predict_dict, data.srl_labels_inv, config)
         doc_example["predicted_srl"] = []
         word_offset = 0
         for j, sentence in enumerate(sentences):
           for pred, args in predictions["srl"][j].iteritems():
             doc_example["predicted_srl"].extend([
-                [int(pred + word_offset), int(a[0] + word_offset), int(a[1] + word_offset), a[2]] for a in args])
+                [int(pred + word_offset), int(a[0] + word_offset),
+                 int(a[1] + word_offset), a[2]] for a in args])
           word_offset += len(sentence)
 
-        #print doc_example
         f.write(json.dumps(doc_example))
         f.write("\n")
         if (i + 1) % 10 == 0:

@@ -9,20 +9,15 @@ Part of the codebase is extended from [e2e-coref](https://github.com/kentonl/e2e
 
 ### Requirements
 * Python 2.7
-  * TensorFlow 1.8.0
-  * pyhocon (for parsing the configurations)
-  * [tensorflow_hub](https://www.tensorflow.org/hub/) (for loading ELMo)
-
-## Getting Started
-* Python 2.7
 * TensorFlow 1.8.0
 * pyhocon (for parsing the configurations)
-* tensorflow_hub (for ELMo)
+* [tensorflow_hub](https://www.tensorflow.org/hub/) (for loading ELMo)
 
+## Getting Started
 * sudo apt-get install tcsh (Only required for processing CoNLL05 data)
 * [GloVe](https://nlp.stanford.edu/projects/glove/) embeddings and the [srlconll](http://www.lsi.upc.edu/~srlconll/soft.html) scripts:  
 `./scripts/fetch_required_data.sh` 
-* Build kernels: `./scripts/build_custom_kernels.sh` (Please make adjustments to the script based on your OS/gcc version)
+* Build kernels: `./scripts/build_custom_kernels.sh` (Please make adjustments to the script according to your OS/gcc version)
 * Download [pretrained models](https://drive.google.com/drive/u/0/folders/1TPpXx1-0TDL-hcMDa0b6fwmvn2HIp-yk). Please extract the models into `./logs`. Git-lfs support will be coming soon.
 
 ## Setting up for ELMo (in progress)
@@ -70,7 +65,7 @@ Run:
   * Run `python test_single.py <experiment>` for the single-model evaluation. For example: `python test_single.py conll2012_final`
 
 ## Other Quirks
-
 * It does not use GPUs by default. Instead, it looks for the `GPU` environment variable, which the code treats as shorthand for `CUDA_VISIBLE_DEVICES`.
 * The evaluator should not be run on GPUs, since evaluating full documents does not fit within GPU memory constraints.
 * The training runs indefinitely and needs to be terminated manually. The model generally converges at about 300k steps and within 48 hours.
+* At test time, the code loads the entire GloVe 300D embedding file in the beginning, which would take a while.

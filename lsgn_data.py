@@ -14,8 +14,7 @@ import srl_eval_utils
 
 # Names for the "given" tensors.
 _input_names = [
-    "tokens", "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len", #"word_offset",
-    "speaker_ids", "genre", 
+    "tokens", "context_word_emb", "head_word_emb", "lm_emb", "char_idx", "text_len",
     "doc_id", "is_training",
     "gold_predicates", "num_gold_predicates",
 ]
@@ -23,19 +22,13 @@ _input_names = [
 # Names for the "gold" tensors.
 _label_names = [
     "predicates", "arg_starts", "arg_ends", "arg_labels", "srl_len",
-    "const_starts", "const_ends", "const_labels", "const_len",
-    "ner_starts", "ner_ends", "ner_labels", "ner_len",
-    "coref_starts", "coref_ends", "coref_cluster_ids", "coref_len",
 ]
 
 # Name for predicted tensors.
 _predict_names = [
     "candidate_starts", "candidate_ends", "candidate_arg_scores", "candidate_pred_scores",
     "arg_starts", "arg_ends", "predicates", "num_args", "num_preds", "arg_labels", "srl_scores",
-    "ner_scores", "const_scores", "arg_scores", "pred_scores",
-    "candidate_mention_starts", "candidate_mention_ends", "candidate_mention_scores", "mention_starts",
-    "mention_ends", "antecedents", "antecedent_scores",
-    "srl_head_scores" #, "coref_head_scores", "ner_head_scores", "entity_gate", "antecedent_attn"
+    "arg_scores", "pred_scores", "head_scores"
 ]
 
 
@@ -47,7 +40,6 @@ class LSGNData(object):
                                                     maybe_cache=self.context_embeddings)
     self.char_embedding_size = config["char_embedding_size"]
     self.char_dict = util.load_char_dict(config["char_vocab_path"])
-    self.genres = { g:i for i,g in enumerate(config["genres"]) }
       
     self.lm_file = None
     self.lm_hub = None
@@ -66,11 +58,6 @@ class LSGNData(object):
         config["srl_labels"], config["include_c_v"])
     self.srl_labels_inv  = [""] + self.adjunct_roles + self.core_roles
     self.srl_labels = { l:i for i,l in enumerate(self.srl_labels_inv) }
-    
-    self.const_labels = { l:i for i,l in enumerate([""] + config["const_labels"]) }
-    self.const_labels_inv = [""] + config["const_labels"]
-    self.ner_labels = { l:i for i,l in enumerate([""] + config["ner_labels"]) }
-    self.ner_labels_inv = [""] + config["ner_labels"]
 
     # IO Stuff.
     # Need to make sure they are in the same order as input_names + label_names
@@ -81,9 +68,6 @@ class LSGNData(object):
         (tf.float32, [None, self.lm_size, self.lm_layers]), # LM embeddings.
         (tf.int32, [None, None]), # Character indices.
         (tf.int32, []),  # Text length.
-        (tf.int32, [None]),  # Speaker IDs.
-        (tf.int32, []),  # Genre.
-        (tf.int32, []),  # Word offset.
         (tf.int32, []),  # Document ID.
         (tf.bool, []),  # Is training.
         (tf.int32, [None]),  # Gold predicate ids (for input).
@@ -92,19 +76,7 @@ class LSGNData(object):
         (tf.int32, [None]),  # Argument starts.
         (tf.int32, [None]),  # Argument ends.
         (tf.int32, [None]),  # SRL labels.
-        (tf.int32, []),  # Number of SRL relations.
-        (tf.int32, [None]),  # Constituent starts.
-        (tf.int32, [None]),  # Constituent ends.
-        (tf.int32, [None]),  # Constituent labels.
-        (tf.int32, []),  # Number of constituent spans.
-        (tf.int32, [None]),  # NER starts.
-        (tf.int32, [None]),  # NER ends.
-        (tf.int32, [None]),  # NER labels.
-        (tf.int32, []),  # Number of NER spans.
-        (tf.int32, [None]),  # Coref mention starts.
-        (tf.int32, [None]),  # Coref mention ends.
-        (tf.int32, [None]),  # Coref cluster ids.
-        (tf.int32, []),  # Number of coref mentions.
+        (tf.int32, [])  # Number of SRL relations.
     ]
     self.input_names = _input_names
     self.label_names = _label_names
@@ -147,12 +119,10 @@ class LSGNData(object):
             e["doc_id"] = doc_id + 1
             e["cluster_id_offset"] = cluster_id_offset
             doc_examples[-1].append(e)
-            num_mentions += len(e["coref"])
-          cluster_id_offset += len(example["clusters"])
+            #num_mentions += len(e["coref"])
+          #cluster_id_offset += len(example["clusters"])
           num_sentences += len(doc_examples[-1])
-        print ("Load {} training documents with {} sentences, {} clusters, and {} mentions.".format(
-            doc_id, num_sentences, cluster_id_offset, num_mentions))
-
+        print ("Load {} training documents with {} sentences".format(doc_id, num_sentences))
         tensor_names = self.input_names + self.label_names
         batch_buffer = []
         num_tokens_in_batch = 0
@@ -198,48 +168,16 @@ class LSGNData(object):
   def split_document_example(self, example):
     """Split document-based samples into sentence-based samples.
     """
-    clusters = example["clusters"]
-    gold_mentions = sorted(tuple(m) for m in util.flatten(clusters))
-    cluster_ids = {}
-    for cluster_id, cluster in enumerate(clusters):
-      for mention in cluster:
-        cluster_ids[tuple(mention)] = cluster_id + 1
-
     sentences = example["sentences"]
     split_examples = []
     word_offset = 0
-
-    if "speakers" in example:
-      speakers = example["speakers"]
-      flat_speakers = util.flatten(example["speakers"])
-      speaker_dict = { s:i for i,s in enumerate(set(flat_speakers)) }
-      speaker_ids = []
-      for sent_speakers in speakers:
-        speaker_ids.append([speaker_dict[s] for s in sent_speakers])
-    else:
-      speaker_ids = [[0] for _ in sentences]
-
-    if "genre" in example:
-      genre_id = self.genres[example["doc_key"][:2]]
-    else:
-      genre_id = 0
-
     for i, sentence in enumerate(sentences):
       text_len = len(sentence)
-      coref_mentions = []
-      for start, end in gold_mentions:
-        if word_offset <= start and end < word_offset + text_len:
-          coref_mentions.append([start, end, cluster_ids[(start, end)]])
       sent_example = {
         "sentence": sentence,
         "doc_key": example["doc_key"],
-        "speaker_ids": speaker_ids[i],
-        "genre": genre_id,
         "sent_id": i,
-        "constituents": example["constituents"][i],
-        "ner": example["ner"][i],
-        "srl": example["srl"][i],
-        "coref": coref_mentions,
+        "srl": example["srl"][i] if "srl" in example else [],
         "word_offset": word_offset,
         "sent_offset": example["sent_offset"]  # Sentence offset for the same doc ID.
       }
@@ -257,7 +195,8 @@ class LSGNData(object):
     text_len = len(sentence)
 
     lm_doc_key = None
-    lm_sent_key = None  
+    lm_sent_key = None
+    # For historical reasons.
     if self.lm_file and "ontonotes" in self.config["lm_path"]:
       idx = doc_key.rfind("_")
       lm_doc_key = doc_key[:idx] + "/" + str(example["sent_offset"] + sent_id)
@@ -278,16 +217,9 @@ class LSGNData(object):
       context_word_emb[j] = self.context_embeddings[word]
       head_word_emb[j] = self.head_embeddings[word]
       char_index[j, :len(word)] = [self.char_dict[c] for c in word]
-
-    const_starts, const_ends, const_labels = (
-        tensorize_labeled_spans(example["constituents"], self.const_labels))
-    ner_starts, ner_ends, ner_labels = (
-        tensorize_labeled_spans(example["ner"], self.ner_labels))
-    coref_starts, coref_ends, coref_cluster_ids = (
-        tensorize_labeled_spans(example["coref"], label_dict=None))
     predicates, arg_starts, arg_ends, arg_labels = (
-        tensorize_srl_relations(example["srl"], self.srl_labels, filter_v_args=self.config["filter_v_args"]))
-    
+        tensorize_srl_relations(example["srl"], self.srl_labels,
+                                filter_v_args=self.config["filter_v_args"]))
     # For gold predicate experiment.
     gold_predicates = get_all_predicates(example["srl"]) - word_offset
     example_tensor = {
@@ -298,30 +230,16 @@ class LSGNData(object):
       "lm_emb": lm_emb,
       "char_idx": char_index,
       "text_len": text_len,
-      "speaker_ids": np.array(example["speaker_ids"]),
-      "genre": example["genre"],
       "doc_id": example["doc_id"],
       "is_training": is_training,
       "gold_predicates": gold_predicates,
       "num_gold_predicates": len(gold_predicates),
       # Labels.
-      "const_starts": const_starts - word_offset,
-      "const_ends": const_ends - word_offset,
-      "const_labels": const_labels,
-      "ner_starts": ner_starts - word_offset,
-      "ner_ends": ner_ends - word_offset,
-      "ner_labels": ner_labels,
       "predicates": predicates - word_offset,
       "arg_starts": arg_starts - word_offset,
       "arg_ends": arg_ends - word_offset,
       "arg_labels": arg_labels,
-      "coref_starts": coref_starts - word_offset,
-      "coref_ends": coref_ends - word_offset,
-      "coref_cluster_ids": coref_cluster_ids + example["cluster_id_offset"],
       "srl_len": len(predicates),
-      "const_len": len(const_starts),
-      "ner_len": len(ner_starts),
-      "coref_len": len(coref_starts)
     }
     return example_tensor
 
@@ -340,8 +258,8 @@ class LSGNData(object):
         e["cluster_id_offset"] = 0
         e["doc_id"] = doc_id + 1
         doc_tensors.append(self.tensorize_example(e, is_training=False))
-        num_mentions_in_doc += len(e["coref"])
-      assert num_mentions_in_doc == len(util.flatten(example["clusters"]))
+        #num_mentions_in_doc += len(e["coref"])
+      #assert num_mentions_in_doc == len(util.flatten(example["clusters"]))
       eval_tensors.append(doc_tensors)
       eval_data.extend(srl_eval_utils.split_example_for_eval(example))
       coref_eval_data.append(example)

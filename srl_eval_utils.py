@@ -25,14 +25,12 @@ def split_example_for_eval(example):
   samples = []
   for i, sentence in enumerate(sentences):
     srl_rels = {}
-    ner_spans = []
+    ner_spans = []  # Unused.
     for r in example["srl"][i]:
       pred_id = r[0] - word_offset
       if pred_id not in srl_rels:
         srl_rels[pred_id] = []
       srl_rels[pred_id].append((r[1] - word_offset, r[2] - word_offset, r[3]))
-    for r in example["ner"][i]:
-      ner_spans.append((r[0] - word_offset, r[1] - word_offset, r[2]))
     samples.append((sentence, srl_rels, ner_spans))
     word_offset += len(sentence)
   return samples
@@ -248,11 +246,9 @@ def print_to_conll(sentences, srl_labels, output_filename, gold_predicates):
   for sent_id, words in enumerate(sentences):
     if gold_predicates:
       assert len(gold_predicates[sent_id]) == len(words)
-
     pred_to_args = srl_labels[sent_id]
     props = ["-" for _ in words]
     col_labels = [["*" for _ in words] for _ in range(len(pred_to_args))]
-
     for i, pred_id in enumerate(sorted(pred_to_args.keys())):
       # To make sure CoNLL-eval script count matching predicates as correct.
       if gold_predicates and gold_predicates[sent_id][pred_id] != "-":
@@ -261,7 +257,6 @@ def print_to_conll(sentences, srl_labels, output_filename, gold_predicates):
         props[pred_id] = "P" + words[pred_id]
       flags = [False for _ in words]
       for start, end, label in pred_to_args[pred_id]:
-        # Unfortunately, gold CoNLL-2012 data has overlapping args.
         if not max(flags[start:end+1]):
           col_labels[i][start] = "(" + label + col_labels[i][start]
           col_labels[i][end] = col_labels[i][end] + ")"
@@ -271,49 +266,7 @@ def print_to_conll(sentences, srl_labels, output_filename, gold_predicates):
       if not flags[pred_id]:
         col_labels[i][pred_id] = "(V*)"
     print_sentence_to_conll(fout, props, col_labels)
-
   fout.close()
 
 
-def print_to_iob2(sentences, gold_ner, pred_ner, gold_file_path):
-  """Print to IOB2 format for NER eval. 
-  """
-  # Write NER prediction to IOB format.
-  temp_file_path = "/tmp/ner_pred_%d.tmp" % os.getpid()
-  # Read IOB tags from preprocessed gold path.
-  gold_info = [[]]
-  if gold_file_path:
-    fgold = codecs.open(gold_file_path, "r", "utf-8")
-    for line in fgold:
-      line = line.strip()
-      if not line:
-        gold_info.append([])
-      else:
-        gold_info[-1].append(line.split())
-  else:
-    fgold = None
-  fout = codecs.open(temp_file_path, "w", "utf-8")
-  for sent_id, words in enumerate(sentences):
-    pred_tags = ["O" for _ in words]
-    for start, end, label in pred_ner[sent_id]:
-      pred_tags[start] = "B-" + label
-      for k in range(start + 1, end + 1):
-        pred_tags[k] = "I-" + label
-    if not fgold:
-      gold_tags = ["O" for _ in words]
-      for start, end, label in gold_ner[sent_id]:
-        gold_tags[start] = "B-" + label
-        for k in range(start + 1, end + 1):
-          gold_tags[k] = "I-" + label
-    else:
-      assert len(gold_info[sent_id]) == len(words)
-      gold_tags = [t[1] for t in gold_info[sent_id]] 
-    for w, gt, pt in zip(words, gold_tags, pred_tags):
-      fout.write(w + " " + gt + " " + pt + "\n")
-    fout.write("\n")
-  fout.close()
-  child = subprocess.Popen('./ner/bin/conlleval < {}'.format(temp_file_path),
-                           shell=True, stdout=subprocess.PIPE)
-  eval_info = child.communicate()[0]
-  print eval_info
 

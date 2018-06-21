@@ -299,16 +299,12 @@ def _dp_decode_non_overlapping_spans(starts, ends, scores, max_len, labels_inv, 
   return new_spans[::-1]
 
 
-# One-stop decoder for all the tasks.
-def mtl_decode(sentences, predict_dict, srl_labels_inv, ner_labels_inv, config):
+def srl_decode(sentences, predict_dict, srl_labels_inv, config):
   predictions = {}
   
   # Decode sentence-level tasks.
   num_sentences = len(sentences)
-  if "srl_scores" in predict_dict:
-    predictions["srl"] = [{} for i in range(num_sentences)]
-  if "ner_scores" in predict_dict:
-    predictions["ner"] = [{} for i in range(num_sentences)]
+  predictions["srl"] = [{} for i in range(num_sentences)]
       
   # Sentence-level predictions.
   for i in range(num_sentences):
@@ -327,44 +323,7 @@ def mtl_decode(sentences, predict_dict, srl_labels_inv, ner_labels_inv, config):
           arg_spans.append((pred_id, pred_id, "V"))
         if arg_spans:
           predictions["srl"][i][pred_id] = sorted(arg_spans, key=lambda x: (x[0], x[1]))
-    if "ner" in predictions:
-      ner_spans = _dp_decode_non_overlapping_spans(
-          predict_dict["candidate_starts"][i],
-          predict_dict["candidate_ends"][i],
-          predict_dict["ner_scores"][i],
-          len(sentences[i]), ner_labels_inv, None, False)
-      predictions["ner"][i] = ner_spans
   
-  # Document-level predictions. -1 means null antecedent.
-  if "antecedent_scores" in predict_dict:
-    mention_spans = zip(predict_dict["mention_starts"], predict_dict["mention_ends"])
-    mention_to_predicted = {}
-    predicted_clusters = []
-
-    def _link_mentions(curr_span, ant_span):
-      if ant_span not in mention_to_predicted:
-        new_cluster_id = len(predicted_clusters)
-        mention_to_predicted[ant_span] = new_cluster_id
-        predicted_clusters.append([ant_span,])
-      cluster_id = mention_to_predicted[ant_span]
-      if not curr_span in mention_to_predicted:
-        mention_to_predicted[curr_span] = cluster_id
-        predicted_clusters[cluster_id].append(curr_span)
-
-    scores = predict_dict["antecedent_scores"]
-    antecedents = predict_dict["antecedents"]
-    for i, ant_label in enumerate(np.argmax(scores, axis=1)):
-      if ant_label <= 0:
-        continue
-      ant_id = antecedents[i][ant_label - 1]
-      assert i > ant_id
-      _link_mentions(mention_spans[i], mention_spans[ant_id])
-
-    predicted_clusters = [tuple(sorted(pc)) for pc in predicted_clusters]
-    predictions["predicted_clusters"] = predicted_clusters
-    predictions["mention_to_predicted"] = { m:predicted_clusters[i] for m,i in mention_to_predicted.items() }
-
-  #print predictions["srl"]
   return predictions  
  
       

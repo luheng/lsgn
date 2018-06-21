@@ -10,6 +10,9 @@ cd embeddings
 wget http://nlp.stanford.edu/data/glove.840B.300d.zip
 unzip glove.840B.300d.zip
 rm glove.840B.300d.zip
+wget https://dada.cs.washington.edu/qasrl/data/glove_50_300_2.zip
+unzip glove_50_300_2.zip
+rm glove_50_300_2.zip
 cd $OLDPWD
 
 SRL_PATH="./data/srl"

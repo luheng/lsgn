@@ -257,35 +257,6 @@ def get_srl_labels(arg_starts, arg_ends, predicates, labels, max_sentence_length
   return srl_labels
 
 
-def get_span_task_labels(arg_starts, arg_ends, labels, max_sentence_length):
-  """Get dense labels for NER/Constituents (unary span prediction tasks).
-  """
-  num_sentences = util.shape(arg_starts, 0)
-  max_num_args = util.shape(arg_starts, 1)
-  sentence_indices = tf.tile(
-      tf.expand_dims(tf.range(num_sentences), 1),
-      [1, max_num_args])  # [num_sentences, max_num_args]
-  pred_indices = tf.concat([
-      tf.expand_dims(sentence_indices, 2),
-      tf.expand_dims(arg_starts, 2),
-      tf.expand_dims(arg_ends, 2)], axis=2)  # [num_sentences, max_num_args, 3]
-  
-  dense_ner_labels = get_dense_span_labels(
-      labels["ner_starts"], labels["ner_ends"], labels["ner_labels"], labels["ner_len"],
-      max_sentence_length)  # [num_sentences, max_sent_len, max_sent_len]
-  dense_const_labels = get_dense_span_labels(
-      labels["const_starts"], labels["const_ends"], labels["const_labels"], labels["const_len"],
-      max_sentence_length)  # [num_sentences, max_sent_len, max_sent_len]
-  dense_coref_labels = get_dense_span_labels(
-      labels["coref_starts"], labels["coref_ends"], labels["coref_cluster_ids"], labels["coref_len"],
-      max_sentence_length)  # [num_sentences, max_sent_len, max_sent_len]
-
-  ner_labels = tf.gather_nd(params=dense_ner_labels, indices=pred_indices)  # [num_sentences, max_num_args]
-  const_labels = tf.gather_nd(params=dense_const_labels, indices=pred_indices)  # [num_sentences, max_num_args]
-  coref_cluster_ids = tf.gather_nd(params=dense_coref_labels, indices=pred_indices)  # [num_sentences, max_num_args]
-  return ner_labels, const_labels, coref_cluster_ids
- 
-
 def get_dense_span_labels(span_starts, span_ends, span_labels, num_spans, max_sentence_length, span_parents=None):
   """Utility function to get dense span or span-head labels.
   Args:
@@ -367,63 +338,4 @@ def get_softmax_loss(scores, labels, candidate_mask):
   return loss
 
 
-def get_coref_softmax_loss(antecedent_scores, antecedent_labels):
-  gold_scores = antecedent_scores + tf.log(tf.to_float(antecedent_labels))  # [k, max_ant + 1]
-  marginalized_gold_scores = tf.reduce_logsumexp(gold_scores, [1])  # [k]
-  log_norm = tf.reduce_logsumexp(antecedent_scores, [1])  # [k]
-  return log_norm - marginalized_gold_scores  # [k]
-
-
-def get_antecedent_scores(top_span_emb, top_span_mention_scores, antecedents, top_span_speaker_ids, genre_emb,
-                          config, dropout, reuse=False):
-  """For coreference only."""
-  k = util.shape(top_span_emb, 0)
-  max_antecedents = util.shape(antecedents, 1)
-  feature_emb_list = []
-
-  if config["use_metadata"]:
-    antecedent_speaker_ids = tf.gather(top_span_speaker_ids, antecedents)  # [k, max_ant]
-    same_speaker = tf.equal(tf.expand_dims(top_span_speaker_ids, 1), antecedent_speaker_ids) # [k, max_ant]
-    speaker_pair_emb = tf.gather(tf.get_variable(
-        "same_speaker_emb", [2, config["feature_size"]]), tf.to_int32(same_speaker)) # [k, max_ant, emb]
-    feature_emb_list.append(speaker_pair_emb)
-    tiled_genre_emb = tf.tile(tf.expand_dims(
-        tf.expand_dims(genre_emb, 0), 0), [k, max_antecedents, 1]) # [k, max_ant, emb]
-    feature_emb_list.append(tiled_genre_emb)
-
-  if config["use_features"]:
-    target_indices = tf.range(k)  # [k]
-    antecedent_distance = tf.expand_dims(target_indices, 1) - antecedents  # [k, max_ant]
-    antecedent_distance_buckets = bucket_distance(antecedent_distance)  # [k, max_ant]
-    with tf.variable_scope("features", reuse=reuse):
-      antecedent_distance_emb = tf.gather(
-          tf.get_variable("antecedent_distance_emb", [10, config["feature_size"]]),
-          antecedent_distance_buckets)  # [k, max_ant]
-    feature_emb_list.append(antecedent_distance_emb)
-
-  feature_emb = tf.concat(feature_emb_list, 2)  # [k, max_ant, emb]
-  feature_emb = tf.nn.dropout(feature_emb, dropout)  # [k, max_ant, emb]
-  antecedent_emb = tf.gather(top_span_emb, antecedents)  # [k, max_ant, emb]
-  target_emb = tf.expand_dims(top_span_emb, 1)  # [k, 1, emb]
-  similarity_emb = antecedent_emb * target_emb  # [k, max_ant, emb]
-  target_emb = tf.tile(target_emb, [1, max_antecedents, 1])  # [k, max_ant, emb]
-  pair_emb = tf.concat([target_emb, antecedent_emb, similarity_emb, feature_emb], 2)  # [k, max_ant, emb]
-  with tf.variable_scope("antecedent_scores" , reuse=reuse):
-    antecedent_scores = util.ffnn(pair_emb, config["ffnn_depth"], config["ffnn_size"], 1,
-                                  dropout)  # [k, max_ant, 1]
-    antecedent_scores = tf.squeeze(antecedent_scores, 2)  # [k, max_ant]
-  antecedent_scores += tf.expand_dims(top_span_mention_scores, 1) + tf.gather(
-      top_span_mention_scores, antecedents)  # [k, max_ant]
-  return antecedent_scores, antecedent_emb, pair_emb  # [k, max_ant]
-
-
-def bucket_distance(distances):
-  """For coreference only:
-  Places the given values (designed for distances) into 10 semi-logscale buckets:
-  [0, 1, 2, 3, 4, 5-7, 8-15, 16-31, 32-63, 64+].
-  """
-  logspace_idx = tf.to_int32(tf.floor(tf.log(tf.to_float(distances))/math.log(2))) + 3
-  use_identity = tf.to_int32(distances <= 4)
-  combined_idx = use_identity * distances + (1 - use_identity) * logspace_idx
-  return tf.minimum(combined_idx, 9)
 

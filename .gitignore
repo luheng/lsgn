@@ -1,6 +1,8 @@
+*.id
 *.pyc
 *.so
 *.jsonlines
+backup
 data
 embeddings
 elmo
@@ -17,4 +19,6 @@ scientifickg
 *.filtered
 *.iob2
 *.tar.gz
+*.zip
+*.out
 srlconll-1.1
