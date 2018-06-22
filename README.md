@@ -69,4 +69,4 @@ Run:
 * The evaluator should not be run on GPUs, since evaluating full documents does not fit within GPU memory constraints.
 * The training runs indefinitely and needs to be terminated manually. The model generally converges at about 300k steps and within 48 hours.
 * At test time, the code loads the entire GloVe 300D embedding file in the beginning, which would take a while.
->>>>>>> 4be7ece577d8c3b4a4c4a1a62b594d6d9828e685
+
